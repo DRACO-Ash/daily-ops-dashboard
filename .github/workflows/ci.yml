@@ -25,6 +25,17 @@ jobs:
       - run: pytest tests/backend
         env:
           PYTHONPATH: backend
+          APP_SECRET_KEY: test-secret-key-for-ci-only
+          APP_ENV: development
+          APP_ALLOWED_ORIGINS: '["http://localhost:3000"]'
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: "5432"
+          POSTGRES_DB: ops_dashboard
+          POSTGRES_USER: ops_user
+          POSTGRES_PASSWORD: test-password
+          JWT_ALGORITHM: HS256
+          JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+          JWT_REFRESH_TOKEN_EXPIRE_DAYS: "7"
 
   frontend:
     runs-on: ubuntu-latest
