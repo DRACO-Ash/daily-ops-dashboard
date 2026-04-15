@@ -48,3 +48,6 @@ coverage.xml
 # Audit exports
 audit/*.csv
 audit/*.json
+
+# Virtual environment
+.venv/
