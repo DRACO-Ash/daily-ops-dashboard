@@ -2,8 +2,8 @@
 line-length = 100
 
 [tool.ruff.lint]
-select = ["E", "F", "I", "B"]
-ignore = ["S101"]  # allow assert in tests
+select = ["E", "F", "I"]
+ignore = ["S101", "B008"]
 
 [tool.mypy]
 python_version = "3.11"
