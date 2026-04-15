@@ -3,7 +3,7 @@ name: CI
 on:
   pull_request:
     branches: [main]
-    
+
 permissions:
   contents: read
   pull-requests: read
@@ -17,9 +17,11 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r backend/requirements.txt
+      - run: pip install ruff mypy bandit
       - run: ruff check backend/app
       - run: mypy backend/app
       - run: bandit -r backend/app -ll
+      - run: pip install pytest pytest-asyncio httpx
       - run: pytest tests/backend
 
   frontend:
