@@ -4,6 +4,10 @@ on:
   pull_request:
     branches: [main]
 
+permissions:
+  contents: read
+  pull-requests: read
+
 jobs:
   backend:
     runs-on: ubuntu-latest
@@ -13,10 +17,25 @@ jobs:
         with:
           python-version: "3.11"
       - run: pip install -r backend/requirements.txt
+      - run: pip install ruff mypy bandit
       - run: ruff check backend/app
       - run: mypy backend/app
       - run: bandit -r backend/app -ll
+      - run: pip install pytest pytest-asyncio httpx
       - run: pytest tests/backend
+        env:
+          PYTHONPATH: backend
+          APP_SECRET_KEY: test-secret-key-for-ci-only
+          APP_ENV: development
+          APP_ALLOWED_ORIGINS: '["http://localhost:3000"]'
+          POSTGRES_HOST: localhost
+          POSTGRES_PORT: "5432"
+          POSTGRES_DB: ops_dashboard
+          POSTGRES_USER: ops_user
+          POSTGRES_PASSWORD: test-password
+          JWT_ALGORITHM: HS256
+          JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "30"
+          JWT_REFRESH_TOKEN_EXPIRE_DAYS: "7"
 
   frontend:
     runs-on: ubuntu-latest
@@ -31,8 +50,13 @@ jobs:
 
   secrets:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
     steps:
       - uses: actions/checkout@v4
         with:
           fetch-depth: 0
       - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
