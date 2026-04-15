@@ -23,6 +23,8 @@ jobs:
       - run: bandit -r backend/app -ll
       - run: pip install pytest pytest-asyncio httpx
       - run: pytest tests/backend
+        env:
+          PYTHONPATH: backend
 
   frontend:
     runs-on: ubuntu-latest
