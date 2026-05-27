@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1.routes import health
+from app.api.v1.routes import elsets, health
 from app.config import settings
 from app.core.logging import configure_logging
 
@@ -23,3 +23,4 @@ app.add_middleware(
 )
 
 app.include_router(health.router, prefix="/api/v1")
+app.include_router(elsets.router, prefix="/api/v1")

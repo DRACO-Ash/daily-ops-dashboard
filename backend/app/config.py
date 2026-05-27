@@ -22,6 +22,10 @@ class Settings(BaseSettings):
     mattermost_bot_token: str = ""
 
     udl_base_url: str = "https://unifieddatalibrary.com/udl"
+    udl_username: str = ""
+    udl_password: str = ""
+    udl_request_timeout_seconds: int = 30
+    udl_verify_ssl: bool = True
 
     anthropic_api_key: str = ""
 
