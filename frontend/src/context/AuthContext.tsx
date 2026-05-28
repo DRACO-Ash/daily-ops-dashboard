@@ -1,9 +1,9 @@
-import { createContext, ReactNode, useContext, useEffect, useState } from "react";
-import { AUTH_TOKEN_KEY } from "../api/client";
+import { createContext, ReactNode, useContext, useState } from "react";
+import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from "../api/client";
+import { login as loginApi } from "../api/auth";
 
 interface AuthContextValue {
   isAuthenticated: boolean;
-  token: string | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => void;
 }
@@ -11,29 +11,26 @@ interface AuthContextValue {
 const AuthContext = createContext<AuthContextValue | undefined>(undefined);
 
 export function AuthProvider({ children }: { children: ReactNode }) {
-  const [token, setToken] = useState<string | null>(
-    () => localStorage.getItem(AUTH_TOKEN_KEY),
+  const [accessToken, setAccessToken] = useState<string | null>(() =>
+    localStorage.getItem(ACCESS_TOKEN_KEY),
   );
 
-  useEffect(() => {
-    if (token) localStorage.setItem(AUTH_TOKEN_KEY, token);
-    else localStorage.removeItem(AUTH_TOKEN_KEY);
-  }, [token]);
-
-  // Stub login: accepts any non-empty username. Replace with real
-  // /api/v1/auth/login call once the backend auth endpoint lands.
-  async function login(username: string, _password: string) {
-    if (!username.trim()) throw new Error("Username is required.");
-    setToken("dev-token");
+  async function login(username: string, password: string) {
+    const tokens = await loginApi({ username, password });
+    localStorage.setItem(ACCESS_TOKEN_KEY, tokens.access_token);
+    localStorage.setItem(REFRESH_TOKEN_KEY, tokens.refresh_token);
+    setAccessToken(tokens.access_token);
   }
 
   function logout() {
-    setToken(null);
+    localStorage.removeItem(ACCESS_TOKEN_KEY);
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+    setAccessToken(null);
   }
 
   return (
     <AuthContext.Provider
-      value={{ isAuthenticated: !!token, token, login, logout }}
+      value={{ isAuthenticated: !!accessToken, login, logout }}
     >
       {children}
     </AuthContext.Provider>

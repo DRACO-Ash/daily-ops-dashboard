@@ -45,6 +45,14 @@
 
 ## ADR-009 — Frontend Auth Stubbed Pending Backend JWT
 **Date:** 2026-05-27
+**Status:** Superseded by ADR-010.
 **Decision:** The frontend `AuthContext` accepts any non-empty username and stores a stub token in `localStorage`. The axios client and the `ProtectedRoute` gate behave as if the token were real.
 **Rationale:** Lets the feature work end-to-end while the real `/api/v1/auth` endpoints are still pending. The contract on the frontend side (token in `Authorization: Bearer ...`, 401 forces logout) matches what the real backend will deliver, so the swap will be small.
 **Risks accepted:** Until the real backend auth lands, anyone reaching the host can use the application. The deployed environment is on a sovereign network with network-level access controls in front of nginx, so the application-level gap is acceptable for now. This ADR is to be superseded by ADR-010 (or similar) when the JWT slice lands.
+
+## ADR-010 — JWT Authentication with Stateless Refresh
+**Date:** 2026-05-28
+**Decision:** Authentication is HS256 JWT bearer tokens issued by `/api/v1/auth/login` and refreshed at `/api/v1/auth/refresh`. Access tokens last 30 minutes; refresh tokens last 7 days. Refresh is stateless: any validly signed refresh token within its expiry window is accepted. Logout is client-side only (delete both tokens from `localStorage`). `get_current_user` enforces a valid access token on protected routes. Supersedes ADR-009.
+**Rationale:** Stateless refresh keeps the Phase 1 schema simple (no refresh-token table, no blocklist). The 30-minute access window bounds the blast radius of a stolen token. Bcrypt via `passlib` hashes passwords with per-user salt. Tokens travel in `Authorization: Bearer ...` headers rather than cookies, which removes the standard CSRF vector. The frontend axios client transparently refreshes once on 401 before redirecting to the login page.
+**Risks accepted:** A stolen refresh token is valid until expiry (up to 7 days). Mitigations: HTTPS-only transport, refresh tokens never sent to non-auth endpoints, single-retry interceptor that breaks token-loss loops. Real revocation (refresh-token blocklist or a JTI table) is on the Phase 1 backlog for the slice that introduces incident response.
+**Operational note:** There is no public sign-up. First user is bootstrapped with `python -m scripts.create_admin --username <name> --password <secret>` from the `backend/` directory. Subsequent users are created by administrators (UI for this is on the backlog).

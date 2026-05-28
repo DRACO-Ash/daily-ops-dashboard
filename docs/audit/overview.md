@@ -73,9 +73,9 @@ Action types are dotted strings. The convention is `<domain>.<entity>.<verb>`. C
 | `udl.elset.ingest` | UDL element-set ingest run completed. `detail` carries the request and the pulled/inserted/updated/skipped counts. | Active |
 | `udl.notso.ingest` | UDL Notice to Space Operators ingest run. | Planned |
 | `udl.tacrep.ingest` | UDL Tactical Report ingest run. | Planned |
-| `auth.user.login` | User signed in. | Planned (with JWT slice) |
+| `auth.user.login` | User signed in. | Planned (next audit-attribution slice) |
 | `auth.user.logout` | User signed out. | Planned |
-| `auth.session.expired` | JWT expired and forced sign-out. | Planned |
+| `auth.token.refresh` | Refresh token exchanged for a new access token. | Planned |
 | `procedure.doc.upload` | Procedure document uploaded. | Planned |
 | `analyst.note.create` | Analyst created a note. | Planned |
 
@@ -87,8 +87,8 @@ For every audit row:
 
 ● **`action_type`** — see the taxonomy above.
 ● **`entity_type`** and **`entity_id`** — what the action acted on. For ingest runs, `entity_type = "elset_ingest_run"` and `entity_id` is unset (the action is bulk).
-● **`user_id`** — the authenticated user. Currently always NULL because auth is stubbed (ADR-009).
-● **`ip_address`** — the originating IP. Currently unset; will be populated once routes have access to `request.client.host`.
+● **`user_id`** — the authenticated user, populated from the JWT subject (ADR-010). NULL only for actions performed outside an authenticated route (for example, scheduled background ingest once implemented).
+● **`ip_address`** — the originating IP, populated from `request.client.host` when available.
 ● **`detail`** — JSON-serialised payload with action-specific fields. For ingest runs, this includes the request parameters and the result counts.
 
 ## Reading the audit log
@@ -123,6 +123,6 @@ Audit data is included in standard PostgreSQL backups. Backup frequency and rete
 ## Open items
 
 ● No verification utility exists yet. Investigators must currently recompute hashes manually.
-● `user_id` and `ip_address` are not yet populated by any action. Will be wired once JWT auth lands.
+● Action types for auth events (`auth.user.login`, `auth.user.logout`, `auth.token.refresh`) are defined in the taxonomy but not yet emitted. Coming in the next audit-attribution slice.
 ● No UI for analysts or operators to view audit history. CLI and direct SQL only for now.
 ● Audit retention policy (how long to keep audit rows before archiving) is undecided. Default behaviour is to keep everything forever.

@@ -103,6 +103,7 @@ async def ingest_elsets(
     sat_no: Optional[int] = None,
     max_results: Optional[int] = None,
     user_id: Optional[uuid.UUID] = None,
+    ip_address: Optional[str] = None,
 ) -> IngestResult:
     records = await client.get_elsets(epoch_gte=epoch_gte, sat_no=sat_no, max_results=max_results)
 
@@ -150,6 +151,7 @@ async def ingest_elsets(
         action_type="udl.elset.ingest",
         entity_type="elset_ingest_run",
         user_id=user_id,
+        ip_address=ip_address,
         detail={
             "epoch_gte": epoch_gte.isoformat(),
             "sat_no": sat_no,

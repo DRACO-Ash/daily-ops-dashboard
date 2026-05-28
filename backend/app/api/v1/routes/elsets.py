@@ -2,13 +2,15 @@ from datetime import datetime
 from typing import Optional
 from uuid import UUID
 
-from fastapi import APIRouter, Depends, HTTPException, Query, status
+from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import func as sa_func
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
+from app.dependencies import get_current_user
 from app.models.elset import Elset
+from app.models.user import User
 from app.schemas.elset import (
     ElsetDetail,
     ElsetIngestRequest,
@@ -30,6 +32,7 @@ async def list_elsets(
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
 ) -> ElsetPage:
     base = select(Elset)
     conditions = []
@@ -61,6 +64,7 @@ async def list_elsets(
 async def get_elset(
     elset_id: UUID,
     db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
 ) -> ElsetDetail:
     result = await db.execute(select(Elset).where(Elset.id == elset_id))
     row = result.scalar_one_or_none()
@@ -72,8 +76,11 @@ async def get_elset(
 @router.post("/ingest", response_model=ElsetIngestResponse)
 async def trigger_ingest(
     payload: ElsetIngestRequest,
+    request: Request,
     db: AsyncSession = Depends(get_db),
+    current_user: User = Depends(get_current_user),
 ) -> ElsetIngestResponse:
+    ip_address = request.client.host if request.client else None
     try:
         async with UDLClient() as client:
             result = await ingest_elsets(
@@ -82,6 +89,8 @@ async def trigger_ingest(
                 epoch_gte=payload.epoch_gte,
                 sat_no=payload.sat_no,
                 max_results=payload.max_results,
+                user_id=current_user.id,
+                ip_address=ip_address,
             )
     except UDLAuthError as exc:
         raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
