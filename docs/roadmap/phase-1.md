@@ -33,9 +33,9 @@ The bar for "done" on Phase 1 is: an analyst can complete a typical watch cycle 
 ● **Repository skeleton.** Backend (FastAPI), frontend (React/Vite), database (PostgreSQL 15), reverse proxy (nginx), Docker Compose orchestration.
 ● **Architectural decision log.** ADR-001 to ADR-011 capture framework, database, deployment, TLS, audit isolation, classification, ingest pattern, audit chain, JWT auth, and refresh rotation.
 ● **CI pipeline.** ruff, ruff-format, mypy, bandit, gitleaks, backend pytest with `pytest-cov` (40% floor), frontend eslint and prettier format check. Pre-commit hooks mirror the CI gate.
-● **Alembic baseline.** Async-aware env, hand-crafted migrations through `0004_create_notso` covering elset, app_user, revoked_jti, notso.
+● **Alembic baseline.** Async-aware env, hand-crafted migrations through `0005_rename_notso_to_notification` covering elset, app_user, revoked_jti, and notification (the latter renamed from notso once the combined UDL endpoint behaviour was confirmed).
 ● **UDL element-set ingest, end-to-end.** Async UDLClient with HTTP Basic auth, ingest service with `(udl_id)` upsert and chained audit write, REST API at `/api/v1/elsets` with list/detail/ingest, analyst page with filter, pagination, sortable columns, clickable rows leading to a detail view.
-● **UDL NOTSO ingest, end-to-end.** Mirrors the elset shape: `UDLClient.get_notsos`, ingest service with the same dedupe and audit pattern, `/api/v1/notsos` routes, Notsos page with msg-type filter, sortable columns, detail view.
+● **UDL notification ingest, end-to-end.** UDL serves Tactical Reports and Notices to Space Operators through a single `/notification` endpoint under `msgType=TACREP_NOTSO`; the surface is named accordingly. `UDLClient.get_notifications` takes `msg_type`, `created_at_gte`, `data_mode`, `source`, `max_results`. Ingest service mirrors the elset dedupe and audit pattern. Routes at `/api/v1/notifications`; analyst page sortable on UDL created time, with msg-type filter and detail view. The earlier "NOTSO" naming (and the matching `notso` table) was renamed to `notification` at migration `0005_rename_notso_to_notification`.
 ● **Real authentication.** `/api/v1/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/me`. JWT (HS256), 30-minute access tokens, 7-day refresh, JTI-tracked. Bcrypt password hashing. Admin bootstrap CLI script. Frontend axios refresh-on-401 interceptor that updates the rotated refresh token.
 ● **Refresh-token rotation and JTI block-list (ADR-011).** Every refresh issues a new pair and revokes the old JTI. `/auth/logout` revokes the JTI carried in the body. Stolen-token reuse is detected and rejected with `revoked_token`.
 ● **Audit log mechanics.** Hash-chained writes serialised by a Postgres advisory lock inside the transaction. Every ingest and every auth event (login, logout, refresh) writes a row attributed to the authenticated user and source IP.
@@ -57,11 +57,11 @@ The bar for "done" on Phase 1 is: an analyst can complete a typical watch cycle 
 
 In rough order of value, smallest natural slices first:
 
-● **Coverage ratchet.** Add tests for the elset and notso ingest services (the upsert path) and the token revocation service, bump the `--cov-fail-under` to 60%. Smallest commit; biggest assurance gain per line.
+● **Coverage ratchet.** Add tests for the elset and notification ingest services (the upsert path) and the token revocation service, bump the `--cov-fail-under` to 60%. Smallest commit; biggest assurance gain per line.
 ● **Username-enumeration mitigation.** Run a dummy `verify_password` on the unknown-user path so the timing matches the wrong-password path. Single-file change to `auth.py` with one new test.
 ● **Multi-page UDL fetch loop.** Loop until the source returns fewer than `max_results` records. Removes the single-call cap on ingest.
 ● **Scheduled background ingest.** APScheduler or a Celery-style worker that pulls every N minutes per source. Audited with a `system` user_id sentinel.
-● **TACREP ingest.** Third UDL surface, same pattern as elsets and notsos.
+● **Additional UDL surfaces.** Conjunctions, sensor data, or other notification message types as the watch demands. Same shape as the existing surfaces.
 
 **SECTION 05**
 
@@ -71,14 +71,15 @@ Grouped by theme.
 
 ### UDL ingest expansion
 
-● TACREP ingest.
+● Additional notification message types beyond `TACREP_NOTSO` if the watch picks up others worth surfacing.
+● Other UDL data surfaces (conjunctions, sensor data) as the watch demands.
 ● Scheduled background ingest with a configurable cadence per source.
 ● Multi-page UDL fetch loop so single pulls are not capped by `max_results`.
 
 ### Analyst-facing UI
 
 ● Saved filters per analyst.
-● Cross-source timeline view (combined recent NOTSO, TACREP, elset, Mattermost feed).
+● Cross-source timeline view (combined recent notifications, elsets, Mattermost feed).
 ● Procedure document upload and reference.
 
 ### Identity and access

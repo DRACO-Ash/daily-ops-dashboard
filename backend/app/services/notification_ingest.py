@@ -8,13 +8,13 @@ from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.sql import func
 
-from app.models.notso import Notso
+from app.models.notification import Notification
 from app.services.audit import write_audit
 from app.services.udl_client import UDLClient
 
 
 @dataclass
-class NotsoIngestResult:
+class NotificationIngestResult:
     pulled: int
     inserted: int
     updated: int
@@ -86,18 +86,22 @@ def _map_udl_record(record: dict[str, Any]) -> Optional[dict[str, Any]]:
     return mapped
 
 
-async def ingest_notsos(
+async def ingest_notifications(
     db: AsyncSession,
     client: UDLClient,
-    effective_from_gte: Optional[datetime] = None,
     msg_type: Optional[str] = None,
+    created_at_gte: Optional[datetime] = None,
+    data_mode: Optional[str] = None,
+    source: Optional[str] = None,
     max_results: Optional[int] = None,
     user_id: Optional[uuid.UUID] = None,
     ip_address: Optional[str] = None,
-) -> NotsoIngestResult:
-    records = await client.get_notsos(
-        effective_from_gte=effective_from_gte,
+) -> NotificationIngestResult:
+    records = await client.get_notifications(
         msg_type=msg_type,
+        created_at_gte=created_at_gte,
+        data_mode=data_mode,
+        source=source,
         max_results=max_results,
     )
 
@@ -115,17 +119,17 @@ async def ingest_notsos(
 
     if rows:
         existing_result = await db.execute(
-            select(Notso.udl_id).where(Notso.udl_id.in_([r["udl_id"] for r in rows]))
+            select(Notification.udl_id).where(Notification.udl_id.in_([r["udl_id"] for r in rows]))
         )
         existing_ids = {row[0] for row in existing_result.all()}
 
-        stmt = pg_insert(Notso).values(rows)
+        stmt = pg_insert(Notification).values(rows)
         update_cols: dict[str, Any] = {
             col: getattr(stmt.excluded, col) for col in UPDATABLE_COLUMNS
         }
         update_cols["updated_at"] = func.now()
         stmt = stmt.on_conflict_do_update(
-            constraint="uq_notso_udl_id",
+            constraint="uq_notification_udl_id",
             set_=update_cols,
         )
         await db.execute(stmt)
@@ -133,7 +137,7 @@ async def ingest_notsos(
         inserted = sum(1 for r in rows if r["udl_id"] not in existing_ids)
         updated = sum(1 for r in rows if r["udl_id"] in existing_ids)
 
-    result = NotsoIngestResult(
+    result = NotificationIngestResult(
         pulled=len(records),
         inserted=inserted,
         updated=updated,
@@ -142,13 +146,15 @@ async def ingest_notsos(
 
     await write_audit(
         db,
-        action_type="udl.notso.ingest",
-        entity_type="notso_ingest_run",
+        action_type="udl.notification.ingest",
+        entity_type="notification_ingest_run",
         user_id=user_id,
         ip_address=ip_address,
         detail={
-            "effective_from_gte": (effective_from_gte.isoformat() if effective_from_gte else None),
             "msg_type": msg_type,
+            "created_at_gte": (created_at_gte.isoformat() if created_at_gte else None),
+            "data_mode": data_mode,
+            "source": source,
             "max_results": max_results,
             "pulled": result.pulled,
             "inserted": result.inserted,

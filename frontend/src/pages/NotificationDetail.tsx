@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
-import { getNotso } from "../api/notsos";
-import type { NotsoDetail as NotsoDetailType } from "../types";
+import { getNotification } from "../api/notifications";
+import type { NotificationDetail as NotificationDetailType } from "../types";
 
 function formatField(value: unknown): string {
   if (value === null || value === undefined) return "n/a";
@@ -15,9 +15,9 @@ function formatDateTime(value: string | null | undefined): string {
   return new Date(value).toISOString().replace("T", " ").slice(0, 19);
 }
 
-export default function NotsoDetailPage() {
+export default function NotificationDetailPage() {
   const { id } = useParams<{ id: string }>();
-  const [item, setItem] = useState<NotsoDetailType | null>(null);
+  const [item, setItem] = useState<NotificationDetailType | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -28,19 +28,19 @@ export default function NotsoDetailPage() {
       setLoading(true);
       setError(null);
       try {
-        const data = await getNotso(id!);
+        const data = await getNotification(id!);
         if (!cancelled) setItem(data);
       } catch (err) {
         if (!cancelled) {
           if (err && typeof err === "object" && "response" in err) {
             const status = (err as { response?: { status?: number } }).response?.status;
             if (status === 404) {
-              setError("NOTSO not found.");
+              setError("Notification not found.");
             } else {
-              setError("Failed to load NOTSO.");
+              setError("Failed to load notification.");
             }
           } else {
-            setError("Failed to load NOTSO.");
+            setError("Failed to load notification.");
           }
         }
       } finally {
@@ -59,10 +59,10 @@ export default function NotsoDetailPage() {
 
   return (
     <div>
-      <Link to="/notsos" className="back-link">
-        &larr; Back to NOTSOs
+      <Link to="/notifications" className="back-link">
+        &larr; Back to notifications
       </Link>
-      <h1>{item.notice_id ?? "NOTSO"}</h1>
+      <h1>{item.notice_id ?? "Notification"}</h1>
 
       <section className="card">
         <h2>Identification</h2>
@@ -85,14 +85,14 @@ export default function NotsoDetailPage() {
       </section>
 
       <section className="card">
-        <h2>Effective window</h2>
+        <h2>Time window</h2>
         <dl className="detail-grid">
-          <dt>From</dt>
-          <dd>{formatDateTime(item.effective_from)}</dd>
-          <dt>Until</dt>
-          <dd>{formatDateTime(item.effective_until)}</dd>
           <dt>UDL created</dt>
           <dd>{formatDateTime(item.udl_created_at)}</dd>
+          <dt>Effective from</dt>
+          <dd>{formatDateTime(item.effective_from)}</dd>
+          <dt>Effective until</dt>
+          <dd>{formatDateTime(item.effective_until)}</dd>
         </dl>
       </section>
 

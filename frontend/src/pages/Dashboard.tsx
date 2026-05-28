@@ -1,8 +1,8 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { listElsets } from "../api/elsets";
-import { listNotsos } from "../api/notsos";
-import type { Elset, Notso } from "../types";
+import { listNotifications } from "../api/notifications";
+import type { Elset, Notification } from "../types";
 
 interface SurfaceStats {
   total: number;
@@ -28,17 +28,17 @@ function elsetToSurfaceStats(total: number, items: Elset[]): SurfaceStats {
   };
 }
 
-function notsoToSurfaceStats(total: number, items: Notso[]): SurfaceStats {
+function notificationToSurfaceStats(total: number, items: Notification[]): SurfaceStats {
   const latest = items[0];
   return {
     total,
     latest: latest
       ? {
           id: latest.id,
-          label: latest.notice_id ?? "NOTSO",
+          label: latest.notice_id ?? "Notification",
           subtitle: latest.msg_type
-            ? `${latest.msg_type} · ${formatDateTime(latest.effective_from)}`
-            : formatDateTime(latest.effective_from),
+            ? `${latest.msg_type} · ${formatDateTime(latest.udl_created_at ?? latest.effective_from)}`
+            : formatDateTime(latest.udl_created_at ?? latest.effective_from),
         }
       : null,
   };
@@ -46,7 +46,7 @@ function notsoToSurfaceStats(total: number, items: Notso[]): SurfaceStats {
 
 export default function Dashboard() {
   const [elsets, setElsets] = useState<SurfaceStats | null>(null);
-  const [notsos, setNotsos] = useState<SurfaceStats | null>(null);
+  const [notifications, setNotifications] = useState<SurfaceStats | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -56,13 +56,15 @@ export default function Dashboard() {
       setLoading(true);
       setError(null);
       try {
-        const [elsetPage, notsoPage] = await Promise.all([
+        const [elsetPage, notificationPage] = await Promise.all([
           listElsets({ limit: 1 }),
-          listNotsos({ limit: 1 }),
+          listNotifications({ limit: 1 }),
         ]);
         if (!cancelled) {
           setElsets(elsetToSurfaceStats(elsetPage.total, elsetPage.items));
-          setNotsos(notsoToSurfaceStats(notsoPage.total, notsoPage.items));
+          setNotifications(
+            notificationToSurfaceStats(notificationPage.total, notificationPage.items),
+          );
         }
       } catch {
         if (!cancelled) setError("Failed to load dashboard.");
@@ -97,14 +99,14 @@ export default function Dashboard() {
           )}
         </Link>
 
-        <Link to="/notsos" className="surface-card">
-          <div className="surface-card-label">NOTSOs</div>
-          <div className="surface-card-metric">{notsos?.total ?? 0}</div>
-          {notsos?.latest && (
+        <Link to="/notifications" className="surface-card">
+          <div className="surface-card-label">Notifications</div>
+          <div className="surface-card-metric">{notifications?.total ?? 0}</div>
+          {notifications?.latest && (
             <div className="surface-card-sub">
-              Latest: {notsos.latest.label}
+              Latest: {notifications.latest.label}
               <br />
-              {notsos.latest.subtitle}
+              {notifications.latest.subtitle}
             </div>
           )}
         </Link>

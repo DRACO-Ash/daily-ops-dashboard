@@ -10,7 +10,7 @@
 
 > **BLUF**
 >
-> Browser-based watch-stand surface for SDA analysts, backed by FastAPI and PostgreSQL behind nginx TLS. UDL is the first data source; NOTSO, TACREP, and Mattermost will follow the same pattern. Every state change is audit-logged with a tamper-evident hash chain.
+> Browser-based watch-stand surface for SDA analysts, backed by FastAPI and PostgreSQL behind nginx TLS. UDL element sets and notifications (TACREP_NOTSO) are live; Mattermost, ClickUp, and procedure documents will follow the same pattern. Every state change is audit-logged with a tamper-evident hash chain.
 
 **SECTION 01**
 
@@ -72,7 +72,7 @@ The frontend is a single-page application served by Vite in development and buil
 
 Two schemas:
 
-● `public` holds operational data (`elset`, `app_user`; later `notso`, `tacrep`, `mattermost_message`, `procedure_doc`).
+● `public` holds operational data (`elset`, `notification`, `app_user`; later `mattermost_message`, `procedure_doc`).
 ● `audit` holds the tamper-evident audit log. The application has INSERT-only permissions on this schema (see ADR-005).
 
 ### Reverse proxy (nginx)

@@ -10,7 +10,7 @@
 
 > **BLUF**
 >
-> Two PostgreSQL schemas. `public` holds operational data (`elset`, `app_user` today; NOTSO, TACREP, Mattermost, and procedure documents on the roadmap). `audit` holds an append-only, hash-chained audit trail with INSERT-only application permissions.
+> Two PostgreSQL schemas. `public` holds operational data (`elset`, `notification`, `app_user`, `revoked_jti` today; Mattermost and procedure documents on the roadmap). `audit` holds an append-only, hash-chained audit trail with INSERT-only application permissions.
 
 **SECTION 01**
 
@@ -69,16 +69,16 @@ Stores UDL element sets ingested via the manual trigger or, in a later slice, by
 >
 > The raw payload is preserved in `raw` so that UDL schema additions are never lost on the way in. Typed columns mirror the fields analysts actually query against. See ADR-007 for the design rationale.
 
-### `notso`
+### `notification`
 
-Stores UDL Notice to Space Operators records ingested via the manual trigger.
+Stores UDL notification records ingested via the manual trigger. UDL serves Tactical Reports (TACREP) and Notices to Space Operators (NOTSO) through the same `/notification` endpoint under `msgType=TACREP_NOTSO`; other notification message types land here too. This table replaced the original `notso` table at migration `0005_rename_notso_to_notification` once the combined nature of the UDL endpoint was confirmed.
 
 | Column | Type | Nullable | Notes |
 |--------|------|----------|-------|
 | `id` | UUID | no | Primary key. |
 | `udl_id` | varchar(64) | yes | UDL's own identifier. Unique when present. Natural key for dedupe. |
 | `notice_id` | varchar(100) | yes | Notice identifier from UDL (`noticeId` or `noticeNumber`). Indexed. |
-| `msg_type` | varchar(50) | yes | Message type (`OPERATIONAL`, advisory, etc.). Indexed. |
+| `msg_type` | varchar(50) | yes | Message type (`TACREP_NOTSO` for the combined Tactical Report / Notice to Space Operators surface; other notification message types possible). Indexed. |
 | `effective_from` | timestamptz | yes | When the notice begins to apply. Indexed. |
 | `effective_until` | timestamptz | yes | When the notice expires. |
 | `subject` | varchar(500) | yes | Short title. |
@@ -87,16 +87,16 @@ Stores UDL Notice to Space Operators records ingested via the manual trigger.
 | `region` | varchar(255) | yes | Area or region described by the notice. |
 | `classification_marking` | varchar(50) | yes | UDL classification (typically `U` for Unclassified). |
 | `data_mode` | varchar(20) | yes | UDL data mode (`REAL`, `TEST`, `SIMULATED`, `EXERCISE`). |
-| `source` | varchar(100) | yes | UDL source identifier. |
-| `udl_created_at` | timestamptz | yes | When UDL created the notice. |
+| `source` | varchar(100) | yes | UDL source identifier (for example `JCO`). |
+| `udl_created_at` | timestamptz | yes | When UDL created the notification. Mapped from UDL's `createdAt`. |
 | `raw` | jsonb | no | Full UDL payload preserved verbatim. |
-| `created_at` | timestamptz | no | Row creation timestamp. |
+| `created_at` | timestamptz | no | Row creation timestamp (our DB write time). |
 | `updated_at` | timestamptz | no | Row last-update timestamp, refreshed on upsert. |
 
 **Indexes**
 
-● `uq_notso_udl_id` — unique on `udl_id` for `INSERT ... ON CONFLICT` upsert.
-● `ix_notso_notice_id`, `ix_notso_msg_type`, `ix_notso_effective_from`, `ix_notso_sat_no` — query indexes.
+● `uq_notification_udl_id` — unique on `udl_id` for `INSERT ... ON CONFLICT` upsert.
+● `ix_notification_notice_id`, `ix_notification_msg_type`, `ix_notification_effective_from`, `ix_notification_sat_no` — query indexes.
 
 ### `app_user`
 

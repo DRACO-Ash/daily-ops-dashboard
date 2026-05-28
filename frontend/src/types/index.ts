@@ -1,4 +1,4 @@
 export * from "./elset";
 export * from "./auth";
-export * from "./notso";
+export * from "./notification";
 export * from "./audit";

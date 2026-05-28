@@ -5,7 +5,7 @@ from uuid import UUID
 from pydantic import BaseModel, ConfigDict
 
 
-class NotsoRead(BaseModel):
+class NotificationRead(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
     id: UUID
@@ -26,24 +26,26 @@ class NotsoRead(BaseModel):
     updated_at: datetime
 
 
-class NotsoDetail(NotsoRead):
+class NotificationDetail(NotificationRead):
     raw: dict[str, Any]
 
 
-class NotsoPage(BaseModel):
-    items: list[NotsoRead]
+class NotificationPage(BaseModel):
+    items: list[NotificationRead]
     total: int
     limit: int
     offset: int
 
 
-class NotsoIngestRequest(BaseModel):
-    effective_from_gte: Optional[datetime] = None
-    msg_type: Optional[str] = None
+class NotificationIngestRequest(BaseModel):
+    msg_type: Optional[str] = "TACREP_NOTSO"
+    created_at_gte: Optional[datetime] = None
+    data_mode: Optional[str] = None
+    source: Optional[str] = None
     max_results: Optional[int] = None
 
 
-class NotsoIngestResponse(BaseModel):
+class NotificationIngestResponse(BaseModel):
     pulled: int
     inserted: int
     updated: int

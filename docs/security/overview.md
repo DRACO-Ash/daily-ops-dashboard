@@ -70,7 +70,7 @@ All other routes are open to any authenticated user. Tighter gating lands with t
 
 Every state-changing action writes an audit entry. The audit log is tamper-evident via a SHA-256 hash chain (ADR-008), with concurrent writes serialised by a Postgres advisory lock inside the transaction. Full details in [docs/audit/overview.md](../audit/overview.md).
 
-All Active action types are emitted today: `udl.elset.ingest`, `udl.notso.ingest`, `auth.user.login`, `auth.user.logout`, `auth.token.refresh`. The viewer at `GET /api/v1/audit` (operator + admin only) exposes them through the dashboard's **Audit log** page.
+All Active action types are emitted today: `udl.elset.ingest`, `udl.notification.ingest`, `auth.user.login`, `auth.user.logout`, `auth.token.refresh`. The viewer at `GET /api/v1/audit` (operator + admin only) exposes them through the dashboard's **Audit log** page.
 
 **SECTION 06**
 

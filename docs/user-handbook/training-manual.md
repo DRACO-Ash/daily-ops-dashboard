@@ -11,7 +11,7 @@
 
 > **BLUF**
 >
-> A watch-stand surface that pulls live UDL data into one tab. Today: element sets. Soon: NOTSO, TACREP, Mattermost, ClickUp, procedure documents. This manual walks the trainee through sign-in, the Element sets surface, common workflows, and what is on the way.
+> A watch-stand surface that pulls live UDL data into one tab. Today: element sets and notifications (Tactical Reports and Notices to Space Operators, served by UDL under `msgType=TACREP_NOTSO`). Soon: Mattermost, ClickUp, procedure documents. This manual walks the trainee through sign-in, the Element sets and Notifications surfaces, common workflows, and what is on the way.
 
 **SECTION 01**
 
@@ -154,7 +154,7 @@ The table is currently fixed to **epoch descending** (most recent first). Sortab
 ● **Sortable columns.** Header clicks have no effect.
 ● **Saved searches.** You cannot bookmark a filter.
 ● **Scheduled ingest.** Every pull is manual.
-● **NOTSO, TACREP, Mattermost surfaces.** These are coming. Same shape as Element sets.
+● **Mattermost surface.** Coming next. Same shape as Element sets and Notifications.
 
 If you find yourself wishing the dashboard did something it does not, tell the team. The backlog is a living thing.
 
@@ -184,7 +184,7 @@ The operator-facing playbook for these is in [docs/runbook/operator-manual.md](.
   | Question | Answer |
   |---|---|
   | "How long is my session?" | 30-minute access tokens, refreshed transparently for 7 days. Restart-of-shift sign-in is normal. |
-  | "Where are NOTSOs and TACREPs?" | Same pattern, later sprints. |
+  | "Where are NOTSOs and TACREPs?" | The **Notifications** page. UDL serves both under one endpoint (`msgType=TACREP_NOTSO`), so they share a table and a surface here. |
   | "Can I delete a pull?" | No. Records can be overwritten by a fresher pull, but rows are not removed by the application. The audit log is append-only. |
   | "What if UDL changes the schema?" | We store the raw payload. Nothing is lost. New typed columns may follow in a migration. |
   | "Is anyone watching what I do?" | The audit log is watching. Every action is attributed to you. Use the dashboard accordingly. |

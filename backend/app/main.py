@@ -1,7 +1,7 @@
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
-from app.api.v1.routes import audit, auth, elsets, health, notsos
+from app.api.v1.routes import audit, auth, elsets, health, notifications
 from app.config import settings
 from app.core.logging import configure_logging
 from app.core.request_id import REQUEST_ID_HEADER, RequestIDMiddleware
@@ -29,5 +29,5 @@ app.add_middleware(
 app.include_router(health.router, prefix="/api/v1")
 app.include_router(auth.router, prefix="/api/v1")
 app.include_router(elsets.router, prefix="/api/v1")
-app.include_router(notsos.router, prefix="/api/v1")
+app.include_router(notifications.router, prefix="/api/v1")
 app.include_router(audit.router, prefix="/api/v1")

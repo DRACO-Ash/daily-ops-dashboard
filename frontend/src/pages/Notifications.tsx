@@ -1,10 +1,16 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { listNotsos, triggerNotsoIngest } from "../api/notsos";
+import { listNotifications, triggerNotificationIngest } from "../api/notifications";
 import SortableHeader from "../components/SortableHeader";
-import type { Notso, NotsoIngestResponse, NotsoSortColumn, SortDirection } from "../types";
+import type {
+  Notification,
+  NotificationIngestResponse,
+  NotificationSortColumn,
+  SortDirection,
+} from "../types";
 
 const PAGE_SIZE = 50;
+const DEFAULT_MSG_TYPE = "TACREP_NOTSO";
 
 function formatDateTime(value: string | null): string {
   if (!value) return "n/a";
@@ -21,24 +27,26 @@ function extractErrorMessage(err: unknown, fallback: string): string {
   return fallback;
 }
 
-export default function NotsosPage() {
+export default function NotificationsPage() {
   const navigate = useNavigate();
-  const [items, setItems] = useState<Notso[]>([]);
+  const [items, setItems] = useState<Notification[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [msgTypeFilter, setMsgTypeFilter] = useState<string | undefined>(undefined);
   const [msgTypeInput, setMsgTypeInput] = useState("");
-  const [sortColumn, setSortColumn] = useState<NotsoSortColumn>("effective_from");
+  const [sortColumn, setSortColumn] = useState<NotificationSortColumn>("udl_created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [reloadToken, setReloadToken] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  const [ingestEffectiveFrom, setIngestEffectiveFrom] = useState("");
-  const [ingestMsgType, setIngestMsgType] = useState("");
+  const [ingestCreatedAt, setIngestCreatedAt] = useState("");
+  const [ingestMsgType, setIngestMsgType] = useState(DEFAULT_MSG_TYPE);
+  const [ingestDataMode, setIngestDataMode] = useState("REAL");
+  const [ingestSource, setIngestSource] = useState("");
   const [ingestMaxResults, setIngestMaxResults] = useState("");
   const [ingesting, setIngesting] = useState(false);
-  const [ingestResult, setIngestResult] = useState<NotsoIngestResponse | null>(null);
+  const [ingestResult, setIngestResult] = useState<NotificationIngestResponse | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -46,7 +54,7 @@ export default function NotsosPage() {
       setLoading(true);
       setError(null);
       try {
-        const page = await listNotsos({
+        const page = await listNotifications({
           msg_type: msgTypeFilter,
           limit: PAGE_SIZE,
           offset,
@@ -59,7 +67,7 @@ export default function NotsosPage() {
         }
       } catch (err) {
         if (!cancelled) {
-          setError(extractErrorMessage(err, "Failed to load NOTSO records."));
+          setError(extractErrorMessage(err, "Failed to load notifications."));
         }
       } finally {
         if (!cancelled) setLoading(false);
@@ -71,7 +79,7 @@ export default function NotsosPage() {
     };
   }, [msgTypeFilter, offset, sortColumn, sortDirection, reloadToken]);
 
-  function onSortChange(column: NotsoSortColumn) {
+  function onSortChange(column: NotificationSortColumn) {
     if (column === sortColumn) {
       setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
     } else {
@@ -94,11 +102,11 @@ export default function NotsosPage() {
     setIngestResult(null);
     setError(null);
     try {
-      const result = await triggerNotsoIngest({
-        effective_from_gte: ingestEffectiveFrom
-          ? new Date(ingestEffectiveFrom).toISOString()
-          : undefined,
-        msg_type: ingestMsgType || undefined,
+      const result = await triggerNotificationIngest({
+        msg_type: ingestMsgType.trim() || undefined,
+        created_at_gte: ingestCreatedAt ? new Date(ingestCreatedAt).toISOString() : undefined,
+        data_mode: ingestDataMode.trim() || undefined,
+        source: ingestSource.trim() || undefined,
         max_results: ingestMaxResults ? Number(ingestMaxResults) : undefined,
       });
       setIngestResult(result);
@@ -116,26 +124,49 @@ export default function NotsosPage() {
 
   return (
     <div>
-      <h1>Notice to Space Operators</h1>
+      <h1>Notifications</h1>
+      <p className="muted-paragraph">
+        UDL serves Tactical Reports (TACREP) and Notices to Space Operators (NOTSO) through a single
+        notification endpoint under <code>msgType=TACREP_NOTSO</code>. Other UDL notification types
+        land here too.
+      </p>
 
       <section className="card">
         <h2>Trigger UDL ingest</h2>
         <form onSubmit={onIngestSubmit} className="ingest-form">
           <label>
-            Effective since (optional)
-            <input
-              type="datetime-local"
-              value={ingestEffectiveFrom}
-              onChange={(e) => setIngestEffectiveFrom(e.target.value)}
-            />
-          </label>
-          <label>
-            Message type (optional)
+            Message type
             <input
               type="text"
               value={ingestMsgType}
               onChange={(e) => setIngestMsgType(e.target.value)}
-              placeholder="e.g. OPERATIONAL"
+              placeholder="e.g. TACREP_NOTSO"
+            />
+          </label>
+          <label>
+            Created since (optional)
+            <input
+              type="datetime-local"
+              value={ingestCreatedAt}
+              onChange={(e) => setIngestCreatedAt(e.target.value)}
+            />
+          </label>
+          <label>
+            Data mode
+            <input
+              type="text"
+              value={ingestDataMode}
+              onChange={(e) => setIngestDataMode(e.target.value)}
+              placeholder="REAL"
+            />
+          </label>
+          <label>
+            Source (optional)
+            <input
+              type="text"
+              value={ingestSource}
+              onChange={(e) => setIngestSource(e.target.value)}
+              placeholder="e.g. JCO"
             />
           </label>
           <label>
@@ -167,7 +198,7 @@ export default function NotsosPage() {
               type="text"
               value={msgTypeInput}
               onChange={(e) => setMsgTypeInput(e.target.value)}
-              placeholder="e.g. OPERATIONAL"
+              placeholder="e.g. TACREP_NOTSO"
             />
           </label>
           <button type="submit">Apply</button>
@@ -204,15 +235,15 @@ export default function NotsosPage() {
                 onChange={onSortChange}
               />
               <SortableHeader
-                column="effective_from"
-                label="Effective from"
+                column="udl_created_at"
+                label="UDL created"
                 activeColumn={sortColumn}
                 activeDirection={sortDirection}
                 onChange={onSortChange}
               />
               <SortableHeader
-                column="effective_until"
-                label="Effective until"
+                column="effective_from"
+                label="Effective from"
                 activeColumn={sortColumn}
                 activeDirection={sortDirection}
                 onChange={onSortChange}
@@ -232,19 +263,19 @@ export default function NotsosPage() {
               <tr
                 key={it.id}
                 className="clickable-row"
-                onClick={() => navigate(`/notsos/${it.id}`)}
+                onClick={() => navigate(`/notifications/${it.id}`)}
               >
                 <td>{it.notice_id ?? "n/a"}</td>
                 <td>{it.msg_type ?? "n/a"}</td>
+                <td>{formatDateTime(it.udl_created_at)}</td>
                 <td>{formatDateTime(it.effective_from)}</td>
-                <td>{formatDateTime(it.effective_until)}</td>
                 <td>{it.sat_no ?? "n/a"}</td>
                 <td>{it.subject ?? "n/a"}</td>
               </tr>
             ))}
             {!loading && items.length === 0 && (
               <tr>
-                <td colSpan={6}>No NOTSO records to show.</td>
+                <td colSpan={6}>No notifications to show.</td>
               </tr>
             )}
           </tbody>

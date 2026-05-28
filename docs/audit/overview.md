@@ -88,8 +88,7 @@ Action types are dotted strings. The convention is `<domain>.<entity>.<verb>`. C
 | Action type | Description | Status |
 |-------------|-------------|--------|
 | `udl.elset.ingest` | UDL element-set ingest run completed. `detail` carries the request and the pulled/inserted/updated/skipped counts. | Active |
-| `udl.notso.ingest` | UDL Notice to Space Operators ingest run completed. `detail` carries the request (`effective_from_gte`, `msg_type`, `max_results`) and the same counts as elset ingest. | Active |
-| `udl.tacrep.ingest` | UDL Tactical Report ingest run. | Planned |
+| `udl.notification.ingest` | UDL notification ingest run completed. Covers Tactical Reports and Notices to Space Operators (UDL serves both under `msgType=TACREP_NOTSO` on the `/notification` endpoint). `detail` carries the request (`msg_type`, `created_at_gte`, `data_mode`, `source`, `max_results`) and the standard counts. | Active |
 | `auth.user.login` | Login attempt. `detail.success` is true for successful login; false with `detail.reason` set to `unknown_user`, `inactive_user`, or `wrong_password` for failures. `user_id` is NULL only for `unknown_user`. | Active |
 | `auth.user.logout` | Logout attempt via `POST /auth/logout` (refresh token in body). `detail.success` true for success; false with `detail.reason` set to `invalid_token`, `missing_claim`, `malformed_subject`, or `already_revoked` for failures. | Active |
 | `auth.token.refresh` | Refresh-token exchange. `detail.success` true for success; false with `detail.reason` set to `invalid_token`, `missing_subject`, `missing_jti`, `malformed_subject`, `revoked_token`, or `inactive_user` for failures. On success the old refresh-token JTI is added to the `revoked_jti` block-list. | Active |

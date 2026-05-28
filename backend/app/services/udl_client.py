@@ -72,20 +72,26 @@ class UDLClient:
             params["maxResults"] = max_results
         return await self._get_list("/elset", params)
 
-    async def get_notsos(
+    async def get_notifications(
         self,
-        effective_from_gte: Optional[datetime] = None,
         msg_type: Optional[str] = None,
+        created_at_gte: Optional[datetime] = None,
+        data_mode: Optional[str] = None,
+        source: Optional[str] = None,
         max_results: Optional[int] = None,
     ) -> list[dict]:
         params: dict[str, Any] = {}
-        if effective_from_gte is not None:
-            params["effectiveFrom"] = f">={_format_epoch(effective_from_gte)}"
         if msg_type is not None:
             params["msgType"] = msg_type
+        if created_at_gte is not None:
+            params["createdAt"] = f">{_format_epoch(created_at_gte)}"
+        if data_mode is not None:
+            params["dataMode"] = data_mode
+        if source is not None:
+            params["source"] = source
         if max_results is not None:
             params["maxResults"] = max_results
-        return await self._get_list("/notso", params)
+        return await self._get_list("/notification", params)
 
     async def _get_list(self, path: str, params: dict[str, Any]) -> list[dict]:
         if self._client is None:

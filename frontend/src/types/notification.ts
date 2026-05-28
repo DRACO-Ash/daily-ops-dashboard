@@ -1,4 +1,4 @@
-export interface Notso {
+export interface Notification {
   id: string;
   udl_id: string | null;
   notice_id: string | null;
@@ -17,45 +17,49 @@ export interface Notso {
   updated_at: string;
 }
 
-export interface NotsoDetail extends Notso {
+export interface NotificationDetail extends Notification {
   raw: Record<string, unknown>;
 }
 
-export interface NotsoPage {
-  items: Notso[];
+export interface NotificationPage {
+  items: Notification[];
   total: number;
   limit: number;
   offset: number;
 }
 
-export interface NotsoIngestRequest {
-  effective_from_gte?: string;
+export interface NotificationIngestRequest {
   msg_type?: string;
+  created_at_gte?: string;
+  data_mode?: string;
+  source?: string;
   max_results?: number;
 }
 
-export interface NotsoIngestResponse {
+export interface NotificationIngestResponse {
   pulled: number;
   inserted: number;
   updated: number;
   skipped: number;
 }
 
-export type NotsoSortColumn =
+export type NotificationSortColumn =
   | "notice_id"
   | "msg_type"
   | "effective_from"
   | "effective_until"
   | "sat_no"
+  | "udl_created_at"
   | "created_at";
 
-export interface NotsoListQuery {
+export interface NotificationListQuery {
   msg_type?: string;
   sat_no?: number;
   effective_from_gte?: string;
   effective_from_lte?: string;
+  created_at_gte?: string;
   limit?: number;
   offset?: number;
-  sort_by?: NotsoSortColumn;
+  sort_by?: NotificationSortColumn;
   sort_dir?: "asc" | "desc";
 }

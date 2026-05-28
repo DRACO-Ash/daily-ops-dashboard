@@ -7,7 +7,7 @@ from app.db.base import Base
 from app.models import (  # noqa: F401  ensure models are registered on Base.metadata
     audit,
     elset,
-    notso,
+    notification,
     revoked_jti,
     user,
 )

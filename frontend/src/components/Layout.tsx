@@ -11,7 +11,7 @@ interface NavItem {
 const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { to: "/", label: "Dashboard" },
   { to: "/elsets", label: "Element sets" },
-  { to: "/notsos", label: "NOTSOs" },
+  { to: "/notifications", label: "Notifications" },
   { to: "/audit", label: "Audit log", requiredRoles: ["operator", "admin"] },
 ];
 

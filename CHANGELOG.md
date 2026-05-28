@@ -12,6 +12,10 @@ All notable changes to the Daily Operations Dashboard are recorded here. The for
 
 ## [Unreleased]
 
+### Changed
+
+● **`notso` → `notification` rename.** UDL serves Tactical Reports (TACREP) and Notices to Space Operators (NOTSO) through a single `/notification` endpoint under `msgType=TACREP_NOTSO`; the earlier naming treated them as separate surfaces, which was wrong. Alembic migration `0005_rename_notso_to_notification` renames the table, its indexes, and the unique constraint. Backend model, schemas, ingest service, routes, UDL client method, and audit action type (`udl.notso.ingest` → `udl.notification.ingest`) all renamed accordingly. Frontend page, types, API wrapper, navigation label, and route URL move from `/notsos` to `/notifications`. UDL endpoint corrected from `/notso` to `/notification`. New ingest parameters (`msg_type`, `created_at_gte`, `data_mode`, `source`, `max_results`) match the example URL used in production. `msg_type` defaults to `TACREP_NOTSO`.
+
 ### Added
 
 ● **Observability and code-quality bar.** Every HTTP response now carries an `X-Request-ID` header (honoured from inbound or generated as a UUID), and every backend log line includes the active `request_id` so traces can be correlated end-to-end. New `GET /api/v1/health/detailed` returns a component breakdown (database connectivity, UDL credential configuration) plus version and environment. Coverage is enforced in CI via `pytest-cov` with a 40% floor (initial bar, will ratchet up). Frontend code is now governed by Prettier; a `format:check` step runs in CI alongside the existing eslint step.
