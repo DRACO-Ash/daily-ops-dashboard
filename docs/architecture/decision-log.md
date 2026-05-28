@@ -28,5 +28,23 @@
 
 ## ADR-006 — Data Classification Confirmed Unclassified
 **Date:** Sprint 1
-**Decision:** All data processed by this system — UDL TACREP_NOTSOs, elset records, Mattermost content, ClickUp exports, procedure documents, and analyst inputs — is confirmed Unclassified.
+**Decision:** All data processed by this system, including UDL TACREP_NOTSOs, elset records, Mattermost content, ClickUp exports, procedure documents, and analyst inputs, is confirmed Unclassified.
 **Rationale:** No handling restrictions apply. Commercial AI APIs (Anthropic Claude) and all major cloud providers are permissible for Phase 2.
+
+## ADR-007 — UDL Ingest Pattern: Typed Columns plus Raw JSONB
+**Date:** 2026-05-27
+**Decision:** Every UDL-sourced table models the fields analysts query against as typed columns, and preserves the full UDL payload in a `raw` JSONB column on the same row.
+**Rationale:** UDL adds fields over time. Preserving the raw payload means a schema bump on the UDL side never costs us data; typed columns keep the analyst-facing queries fast and well-indexed. The first table that follows this pattern is `elset`. NOTSO, TACREP, and Mattermost ingest will follow the same shape.
+**Alternatives considered:** Pure JSONB rows. Rejected because typed queries on indexed columns are dramatically faster and let us add database-level constraints where they help.
+
+## ADR-008 — Hash-Chained Audit Log with Postgres Advisory Lock
+**Date:** 2026-05-27
+**Decision:** The audit log is tamper-evident via a SHA-256 hash chain. Each row's `entry_hash` covers the previous row's `entry_hash` plus the canonical-JSON serialisation of the new row's payload. Concurrent writes are serialised inside a single transaction via `pg_advisory_xact_lock`.
+**Rationale:** The chain detects after-the-fact tampering even by someone with database-level access. The advisory lock prevents two concurrent writers from forking the chain by both reading the same `previous_hash`. Doing this inside the transaction keeps the lock duration short and bounded by the audit write itself.
+**Alternatives considered:** Per-row Postgres triggers to compute the hash. Rejected to keep the logic in the application layer where it can be unit-tested. External tamper-evident logging service. Rejected as overkill for Phase 1.
+
+## ADR-009 — Frontend Auth Stubbed Pending Backend JWT
+**Date:** 2026-05-27
+**Decision:** The frontend `AuthContext` accepts any non-empty username and stores a stub token in `localStorage`. The axios client and the `ProtectedRoute` gate behave as if the token were real.
+**Rationale:** Lets the feature work end-to-end while the real `/api/v1/auth` endpoints are still pending. The contract on the frontend side (token in `Authorization: Bearer ...`, 401 forces logout) matches what the real backend will deliver, so the swap will be small.
+**Risks accepted:** Until the real backend auth lands, anyone reaching the host can use the application. The deployed environment is on a sovereign network with network-level access controls in front of nginx, so the application-level gap is acceptable for now. This ADR is to be superseded by ADR-010 (or similar) when the JWT slice lands.

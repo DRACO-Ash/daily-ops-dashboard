@@ -1,0 +1,128 @@
+# Audit Logging Overview
+
+**Classification:** Unclassified
+**Owner:** Daily Operations Dashboard Team, Bluestaq Limited
+**Version:** 0.1
+**Last updated:** 2026-05-27
+
+## Intent
+
+Every state-changing action in the Daily Operations Dashboard is recorded in a tamper-evident audit trail. The trail can be replayed end-to-end by an investigator, and any retrospective edit (whether through the application, the database, or direct disk access) is detectable by recomputing the hash chain.
+
+## Schema isolation
+
+The audit log lives in its own PostgreSQL schema (ADR-005).
+
+● Schema: `audit`
+● Table: `audit.audit_log`
+● Application role permissions: `INSERT` only.
+
+The application cannot UPDATE, DELETE, or TRUNCATE audit rows. A privileged DBA can still bypass these permissions, but the hash chain detects any modification after the fact.
+
+## Hash chain mechanism
+
+Each row carries two hash columns:
+
+● `previous_hash` — the `entry_hash` of the immediately prior row, or NULL for the first row.
+● `entry_hash` — `sha256(previous_hash + canonical_json(payload))`, hex-encoded.
+
+The `payload` is a canonical JSON serialisation of:
+
+```json
+{
+  "action_type":  "...",
+  "entity_type":  "...",
+  "entity_id":    "...",
+  "user_id":      "...",
+  "ip_address":   "...",
+  "detail":       { ... },
+  "timestamp":    "..."
+}
+```
+
+Canonicalisation rules used by [backend/app/services/audit.py](../../backend/app/services/audit.py):
+
+● `json.dumps(payload, sort_keys=True, separators=(",", ":"), default=str)`.
+● Keys are alphabetically ordered.
+● No whitespace.
+● Non-JSON-serialisable values (UUIDs, datetimes) fall back to `str()`.
+
+To verify the chain, walk the table by `timestamp ASC`, recompute each `entry_hash`, and assert equality. Any mismatch points to either a tampered row or a row missing from the chain.
+
+## Concurrency control
+
+If two ingests fire at the same moment, both would naively read the same `previous_hash` and create two rows that both claim it as their predecessor, forking the chain. The audit writer prevents this with a Postgres advisory lock taken inside the transaction (ADR-008):
+
+```python
+await db.execute(
+    text("SELECT pg_advisory_xact_lock(:k)"),
+    {"k": AUDIT_ADVISORY_LOCK_KEY},
+)
+```
+
+`pg_advisory_xact_lock` releases automatically when the transaction commits or rolls back, so the lock duration is bounded by the audit write itself.
+
+The advisory key (`0x4F505841` in [backend/app/services/audit.py](../../backend/app/services/audit.py)) is constant across the whole application. Other features that need to coordinate independently must use a different key.
+
+## Action type taxonomy
+
+Action types are dotted strings. The convention is `<domain>.<entity>.<verb>`. Current and planned values:
+
+| Action type | Description | Status |
+|-------------|-------------|--------|
+| `udl.elset.ingest` | UDL element-set ingest run completed. `detail` carries the request and the pulled/inserted/updated/skipped counts. | Active |
+| `udl.notso.ingest` | UDL Notice to Space Operators ingest run. | Planned |
+| `udl.tacrep.ingest` | UDL Tactical Report ingest run. | Planned |
+| `auth.user.login` | User signed in. | Planned (with JWT slice) |
+| `auth.user.logout` | User signed out. | Planned |
+| `auth.session.expired` | JWT expired and forced sign-out. | Planned |
+| `procedure.doc.upload` | Procedure document uploaded. | Planned |
+| `analyst.note.create` | Analyst created a note. | Planned |
+
+New action types should be added to this table when introduced.
+
+## What gets recorded
+
+For every audit row:
+
+● **`action_type`** — see the taxonomy above.
+● **`entity_type`** and **`entity_id`** — what the action acted on. For ingest runs, `entity_type = "elset_ingest_run"` and `entity_id` is unset (the action is bulk).
+● **`user_id`** — the authenticated user. Currently always NULL because auth is stubbed (ADR-009).
+● **`ip_address`** — the originating IP. Currently unset; will be populated once routes have access to `request.client.host`.
+● **`detail`** — JSON-serialised payload with action-specific fields. For ingest runs, this includes the request parameters and the result counts.
+
+## Reading the audit log
+
+There is no UI for the audit log yet. To inspect from the database:
+
+```sql
+SELECT timestamp, action_type, entity_type, detail::text
+  FROM audit.audit_log
+ ORDER BY timestamp DESC
+ LIMIT 100;
+```
+
+To verify integrity (manual approach until a verification utility lands):
+
+```sql
+SELECT id, timestamp, previous_hash, entry_hash, detail
+  FROM audit.audit_log
+ ORDER BY timestamp ASC;
+```
+
+Then for each row, recompute `sha256(previous_hash || canonical_json(payload))` and compare against `entry_hash`. A verification utility is in the backlog.
+
+## Exports
+
+Audit exports for compliance review land in `audit/` at the project root (gitignored). The export utility is in the backlog. Once it ships, exports will be CSV or JSON, marked with the export timestamp and the operator who triggered it. The export itself is audit-logged with action type `audit.export.run`.
+
+## Backups
+
+Audit data is included in standard PostgreSQL backups. Backup frequency and retention are environment-specific; see the deployment-environment runbook for the relevant target.
+
+## Open items
+
+● No verification utility exists yet. Investigators must currently recompute hashes manually.
+● `user_id` and `ip_address` are not yet populated by any action. Will be wired once JWT auth lands.
+● No UI for analysts or operators to view audit history. CLI and direct SQL only for now.
+● Audit retention policy (how long to keep audit rows before archiving) is undecided. Default behaviour is to keep everything forever.
