@@ -5,12 +5,12 @@
 **Document classification:** Commercial in Confidence
 **Data classification:** Unclassified (per ADR-006)
 **Owner:** Daily Operations Dashboard Team, Bluestaq Limited
-**Version:** 0.2
+**Version:** 0.3
 **Last updated:** 2026-05-28
 
 > **BLUF**
 >
-> Phase 1 stands up the operational core on a sovereign UK host. UDL ingest, real auth, hash-chained audit, watch-stand UI. The bar for "done" is: an analyst completes a typical watch cycle entirely inside the dashboard, with full audit history, without ad-hoc tooling.
+> Phase 1 stands up the operational core on a sovereign UK host. UDL ingest (elsets + NOTSOs), real JWT auth with refresh rotation, hash-chained audit with viewer, request-id-correlated logs, watch-stand UI. The bar for "done" is: an analyst completes a typical watch cycle entirely inside the dashboard, with full audit history, without ad-hoc tooling. Most of that bar is now met.
 
 **SECTION 01**
 
@@ -31,17 +31,18 @@ The bar for "done" on Phase 1 is: an analyst can complete a typical watch cycle 
 ## Completed
 
 ● **Repository skeleton.** Backend (FastAPI), frontend (React/Vite), database (PostgreSQL 15), reverse proxy (nginx), Docker Compose orchestration.
-● **Architectural decision log.** ADR-001 to ADR-010 capture the framework, database, deployment, TLS posture, audit isolation, classification, ingest pattern, audit chain, and real JWT auth.
-● **CI pipeline.** ruff, mypy, bandit, gitleaks, backend pytest, frontend lint and test. Pre-commit hooks mirror the CI gate.
-● **Alembic baseline.** Async-aware env, hand-crafted first migrations for `elset` and `app_user`.
-● **UDL element-set ingest, end-to-end.**
-  ● Async UDLClient with HTTP Basic auth and typed errors.
-  ● Ingest service with `(udl_id)` upsert and chained audit write.
-  ● REST API at `/api/v1/elsets` with list, detail, and manual ingest trigger.
-  ● Analyst page with filter, pagination, and ingest trigger.
-● **Audit log mechanics.** Hash-chained writes serialised by a Postgres advisory lock inside the transaction. Every elset ingest writes a row attributed to the authenticated user and their IP.
-● **Real authentication.** `/api/v1/auth/login`, `/auth/refresh`, `/auth/me`. JWT (HS256), 30-minute access tokens, 7-day refresh, stateless. Bcrypt password hashing. Admin bootstrap CLI script. Frontend axios refresh-on-401 interceptor.
-● **Frontend.** AuthContext now real, ProtectedRoute, Layout, Login, Dashboard, axios client, design tokens against the Bluestaq palette.
+● **Architectural decision log.** ADR-001 to ADR-011 capture framework, database, deployment, TLS, audit isolation, classification, ingest pattern, audit chain, JWT auth, and refresh rotation.
+● **CI pipeline.** ruff, ruff-format, mypy, bandit, gitleaks, backend pytest with `pytest-cov` (40% floor), frontend eslint and prettier format check. Pre-commit hooks mirror the CI gate.
+● **Alembic baseline.** Async-aware env, hand-crafted migrations through `0004_create_notso` covering elset, app_user, revoked_jti, notso.
+● **UDL element-set ingest, end-to-end.** Async UDLClient with HTTP Basic auth, ingest service with `(udl_id)` upsert and chained audit write, REST API at `/api/v1/elsets` with list/detail/ingest, analyst page with filter, pagination, sortable columns, clickable rows leading to a detail view.
+● **UDL NOTSO ingest, end-to-end.** Mirrors the elset shape: `UDLClient.get_notsos`, ingest service with the same dedupe and audit pattern, `/api/v1/notsos` routes, Notsos page with msg-type filter, sortable columns, detail view.
+● **Real authentication.** `/api/v1/auth/login`, `/auth/refresh`, `/auth/logout`, `/auth/me`. JWT (HS256), 30-minute access tokens, 7-day refresh, JTI-tracked. Bcrypt password hashing. Admin bootstrap CLI script. Frontend axios refresh-on-401 interceptor that updates the rotated refresh token.
+● **Refresh-token rotation and JTI block-list (ADR-011).** Every refresh issues a new pair and revokes the old JTI. `/auth/logout` revokes the JTI carried in the body. Stolen-token reuse is detected and rejected with `revoked_token`.
+● **Audit log mechanics.** Hash-chained writes serialised by a Postgres advisory lock inside the transaction. Every ingest and every auth event (login, logout, refresh) writes a row attributed to the authenticated user and source IP.
+● **Audit log viewer.** `GET /api/v1/audit` role-gated to operator and admin, paginated, filterable. Dashboard **Audit log** page surfaces the full chain to operators and admins.
+● **Observability.** `RequestIDMiddleware` attaches an `X-Request-ID` per request, honoured from inbound or generated, and every backend log line carries the active `request_id`. `GET /api/v1/health/detailed` returns component-level status (database, UDL credentials), version, and environment.
+● **Dashboard surface cards.** Live counts and most-recent timestamps for each data source, fetched in parallel on page load.
+● **Code quality.** Prettier configured and enforced in CI alongside eslint. `pytest-cov` enforces a 40% floor (intent to ratchet up).
 ● **Documentation set.** README, architecture overview, data model, security overview, audit overview, developer setup, operator manual, analyst training manual, this roadmap, changelog. Aligned to the Bluestaq Ltd Document Design and Narrative Style Guide v3.
 
 **SECTION 03**
@@ -52,28 +53,30 @@ The bar for "done" on Phase 1 is: an analyst can complete a typical watch cycle 
 
 **SECTION 04**
 
-## Next slice (proposed)
+## Next slice candidates
 
-● **Audit emission for auth events.** Issue `auth.user.login`, `auth.user.logout`, and `auth.token.refresh` rows. Action types are already in the taxonomy. Touches `app/api/v1/routes/auth.py` and `app/services/audit.py`.
-● **Refresh-token revocation.** A small `revoked_jti` table plus a check in `/auth/refresh`. Removes the "rotate `APP_SECRET_KEY`" hammer for stolen-token scenarios. Lands alongside the incident response runbook.
+In rough order of value, smallest natural slices first:
+
+● **Coverage ratchet.** Add tests for the elset and notso ingest services (the upsert path) and the token revocation service, bump the `--cov-fail-under` to 60%. Smallest commit; biggest assurance gain per line.
+● **Username-enumeration mitigation.** Run a dummy `verify_password` on the unknown-user path so the timing matches the wrong-password path. Single-file change to `auth.py` with one new test.
+● **Multi-page UDL fetch loop.** Loop until the source returns fewer than `max_results` records. Removes the single-call cap on ingest.
+● **Scheduled background ingest.** APScheduler or a Celery-style worker that pulls every N minutes per source. Audited with a `system` user_id sentinel.
+● **TACREP ingest.** Third UDL surface, same pattern as elsets and notsos.
 
 **SECTION 05**
 
 ## Backlog (Phase 1 scope)
 
-Grouped by theme. Order within a theme is the suggested sequence.
+Grouped by theme.
 
 ### UDL ingest expansion
 
-● NOTSO ingest (mirror the elset pattern).
 ● TACREP ingest.
 ● Scheduled background ingest with a configurable cadence per source.
 ● Multi-page UDL fetch loop so single pulls are not capped by `max_results`.
 
 ### Analyst-facing UI
 
-● Element-set detail view that surfaces the full raw payload.
-● Sortable columns on the element-set table.
 ● Saved filters per analyst.
 ● Cross-source timeline view (combined recent NOTSO, TACREP, elset, Mattermost feed).
 ● Procedure document upload and reference.
@@ -81,16 +84,18 @@ Grouped by theme. Order within a theme is the suggested sequence.
 ### Identity and access
 
 ● User management UI (create, deactivate, role change).
-● Role-based gating on routes that need it (admin-only endpoints).
-● Forced sign-out workflow integrated with the refresh-token revocation table.
+● Per-user "revoke all my tokens" admin action against the `revoked_jti` table.
+● Wider role-based gating once roles have surfaces to gate.
 
 ### Audit and observability
 
-● CLI utility (`audit-verify`) that walks the chain and reports any breaks.
+● CLI utility (`audit-verify`) that walks the hash chain and reports any breaks.
+● "Verify the chain" button in the audit log UI.
 ● Audit export workflow with its own `audit.export.run` action type.
-● Centralised log shipping (filebeat or vector to a sink).
+● Pruning job for `revoked_jti` and old audit rows past their retention window.
+● Structured (JSON) logging for log aggregator ingestion.
 ● Application metrics (Prometheus or OpenTelemetry).
-● Health endpoint richer than `{"status":"ok"}` (component-level breakdown).
+● Centralised log shipping (filebeat or vector to a sink).
 
 ### Platform and tooling
 
@@ -102,7 +107,7 @@ Grouped by theme. Order within a theme is the suggested sequence.
 ### Documentation
 
 ● Threat model document with STRIDE breakdown per surface.
-● Incident response runbook once forced sign-out exists.
+● Incident response runbook once the per-user revoke action exists.
 ● Per-data-source ingest runbook (one per UDL endpoint).
 
 **SECTION 06**
