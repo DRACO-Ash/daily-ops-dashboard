@@ -14,6 +14,7 @@ All notable changes to the Daily Operations Dashboard are recorded here. The for
 
 ### Added
 
+● Audit-log emission for auth events. `POST /auth/login` writes `auth.user.login` rows for both success and the three failure modes (unknown user, inactive user, wrong password); `POST /auth/refresh` writes `auth.token.refresh` rows for success and four failure reasons; new `POST /auth/logout` endpoint writes `auth.user.logout` and returns 204. Action types are now Active in the audit taxonomy.
 ● Real JWT authentication. `POST /api/v1/auth/login` and `POST /api/v1/auth/refresh` issue HS256 tokens (30-minute access, 7-day refresh). `GET /api/v1/auth/me` returns the current user. Supersedes the frontend auth stub.
 ● `User` model with role enum (analyst / operator / admin), bcrypt password hashing, alembic migration `0002_create_user`.
 ● `get_current_user` dependency wired onto every `/elsets` route. `POST /elsets/ingest` now records the authenticated user's `id` and IP address in the audit log.

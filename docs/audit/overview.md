@@ -90,9 +90,9 @@ Action types are dotted strings. The convention is `<domain>.<entity>.<verb>`. C
 | `udl.elset.ingest` | UDL element-set ingest run completed. `detail` carries the request and the pulled/inserted/updated/skipped counts. | Active |
 | `udl.notso.ingest` | UDL Notice to Space Operators ingest run. | Planned |
 | `udl.tacrep.ingest` | UDL Tactical Report ingest run. | Planned |
-| `auth.user.login` | User signed in. | Planned (next audit-attribution slice) |
-| `auth.user.logout` | User signed out. | Planned |
-| `auth.token.refresh` | Refresh token exchanged for a new access token. | Planned |
+| `auth.user.login` | Login attempt. `detail.success` is true for successful login; false with `detail.reason` set to `unknown_user`, `inactive_user`, or `wrong_password` for failures. `user_id` is NULL only for `unknown_user`. | Active |
+| `auth.user.logout` | User signed out via `POST /auth/logout`. | Active |
+| `auth.token.refresh` | Refresh-token exchange. `detail.success` true for success; false with `detail.reason` set to `invalid_token`, `missing_subject`, `malformed_subject`, or `inactive_user` for failures. | Active |
 | `procedure.doc.upload` | Procedure document uploaded. | Planned |
 | `analyst.note.create` | Analyst created a note. | Planned |
 
@@ -150,7 +150,6 @@ Audit data is included in standard PostgreSQL backups. Backup frequency and rete
 ## Open items
 
 ● No verification utility exists yet. Investigators must currently recompute hashes manually.
-● Action types for auth events (`auth.user.login`, `auth.user.logout`, `auth.token.refresh`) are defined in the taxonomy but not yet emitted. Coming in the next audit-attribution slice.
 ● No UI for analysts or operators to view audit history. CLI and direct SQL only for now.
 ● Audit retention policy (how long to keep audit rows before archiving) is undecided. Default behaviour is to keep everything forever.
 

@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime, timedelta, timezone
-from typing import Optional
+from typing import Any, Optional
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -56,6 +56,18 @@ def _restore_db_override():
         app.dependency_overrides[get_db] = prior
     else:
         app.dependency_overrides.pop(get_db, None)
+
+
+@pytest.fixture(autouse=True)
+def audit_calls(monkeypatch) -> list[dict[str, Any]]:
+    calls: list[dict[str, Any]] = []
+
+    async def fake_write_audit(db, **kwargs):
+        calls.append(kwargs)
+        return None
+
+    monkeypatch.setattr("app.api.v1.routes.auth.write_audit", fake_write_audit)
+    return calls
 
 
 def test_hash_and_verify_password() -> None:
@@ -230,3 +242,142 @@ async def test_refresh_rejects_access_token_used_as_refresh() -> None:
         )
 
     assert response.status_code == 401
+
+
+async def test_login_success_emits_audit_row(audit_calls) -> None:
+    user = _make_user(username="alice", password="secret")
+    app.dependency_overrides[get_db] = _override_db(user)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"username": "alice", "password": "secret"},
+        )
+
+    assert response.status_code == 200
+    assert len(audit_calls) == 1
+    call = audit_calls[0]
+    assert call["action_type"] == "auth.user.login"
+    assert call["entity_type"] == "user"
+    assert call["entity_id"] == str(user.id)
+    assert call["user_id"] == user.id
+    assert call["detail"]["success"] is True
+    assert call["detail"]["username"] == "alice"
+    assert "reason" not in call["detail"]
+
+
+async def test_login_wrong_password_emits_audit_with_reason(audit_calls) -> None:
+    user = _make_user(username="alice", password="secret")
+    app.dependency_overrides[get_db] = _override_db(user)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"username": "alice", "password": "wrong"},
+        )
+
+    assert response.status_code == 401
+    assert len(audit_calls) == 1
+    call = audit_calls[0]
+    assert call["action_type"] == "auth.user.login"
+    assert call["user_id"] == user.id
+    assert call["detail"]["success"] is False
+    assert call["detail"]["reason"] == "wrong_password"
+
+
+async def test_login_unknown_user_emits_audit_without_user_id(audit_calls) -> None:
+    app.dependency_overrides[get_db] = _override_db(None)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"username": "ghost", "password": "secret"},
+        )
+
+    assert response.status_code == 401
+    assert len(audit_calls) == 1
+    call = audit_calls[0]
+    assert call["action_type"] == "auth.user.login"
+    assert call["user_id"] is None
+    assert call["entity_id"] is None
+    assert call["detail"]["success"] is False
+    assert call["detail"]["reason"] == "unknown_user"
+    assert call["detail"]["username"] == "ghost"
+
+
+async def test_login_inactive_user_emits_audit(audit_calls) -> None:
+    user = _make_user(username="alice", password="secret", is_active=False)
+    app.dependency_overrides[get_db] = _override_db(user)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/auth/login",
+            json={"username": "alice", "password": "secret"},
+        )
+
+    assert response.status_code == 401
+    assert len(audit_calls) == 1
+    call = audit_calls[0]
+    assert call["detail"]["reason"] == "inactive_user"
+    assert call["user_id"] == user.id
+
+
+async def test_refresh_success_emits_audit_row(audit_calls) -> None:
+    user = _make_user(username="alice")
+    app.dependency_overrides[get_db] = _override_db(user)
+    refresh_token = create_refresh_token(str(user.id))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": refresh_token},
+        )
+
+    assert response.status_code == 200
+    assert len(audit_calls) == 1
+    call = audit_calls[0]
+    assert call["action_type"] == "auth.token.refresh"
+    assert call["user_id"] == user.id
+    assert call["detail"]["success"] is True
+
+
+async def test_refresh_invalid_token_emits_audit_with_no_user(audit_calls) -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": "garbage"},
+        )
+
+    assert response.status_code == 401
+    assert len(audit_calls) == 1
+    call = audit_calls[0]
+    assert call["action_type"] == "auth.token.refresh"
+    assert call["user_id"] is None
+    assert call["detail"]["success"] is False
+    assert call["detail"]["reason"] == "invalid_token"
+
+
+async def test_logout_emits_audit_and_returns_204(audit_calls) -> None:
+    user = _make_user(username="alice")
+    app.dependency_overrides[get_db] = _override_db(user)
+    token = create_access_token(str(user.id))
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/auth/logout",
+            headers={"Authorization": f"Bearer {token}"},
+        )
+
+    assert response.status_code == 204
+    assert len(audit_calls) == 1
+    call = audit_calls[0]
+    assert call["action_type"] == "auth.user.logout"
+    assert call["user_id"] == user.id
+
+
+async def test_logout_requires_auth(audit_calls) -> None:
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post("/api/v1/auth/logout")
+
+    assert response.status_code == 401
+    assert audit_calls == []
