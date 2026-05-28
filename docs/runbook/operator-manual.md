@@ -1,10 +1,19 @@
+**BLUESTAQ LIMITED** | Operator Manual | **COMMERCIAL IN CONFIDENCE**
+
 # Operator Manual
 
-**Classification:** Unclassified
+**Document classification:** Commercial in Confidence
+**Data classification:** Unclassified (per ADR-006)
 **Owner:** Daily Operations Dashboard Team, Bluestaq Limited
-**Version:** 0.1
-**Last updated:** 2026-05-27
+**Version:** 0.2
+**Last updated:** 2026-05-28
 **Audience:** Operators and on-call engineers responsible for keeping the Daily Operations Dashboard healthy.
+
+> **BLUF**
+>
+> Four containers behind nginx. When something is wrong, find which of the four is unhappy, fix it, confirm. This is your playbook for daily checks, ingest triggering, log access, common failures, and disaster scenarios.
+
+**SECTION 01**
 
 ## At a glance
 
@@ -15,7 +24,9 @@ The Daily Operations Dashboard runs as four containers behind nginx:
 ● `backend` (FastAPI, served by uvicorn)
 ● `db` (PostgreSQL 15)
 
-When something is wrong, the operator's job is to find which of those four is unhappy, fix it, and confirm. This document is the playbook.
+When something is wrong, the operator's job is to find which of those four is unhappy, fix it, and confirm.
+
+**SECTION 02**
 
 ## Daily checks
 
@@ -26,6 +37,8 @@ When something is wrong, the operator's job is to find which of those four is un
 | Last ingest recent | See "Inspect ingest history" below | An audit row within expected cadence |
 | Containers up | `docker compose ps` | All four `Up` |
 | Disk space | `df -h` (Linux) or `Get-PSDrive C` (Windows) | Free space above local threshold |
+
+**SECTION 03**
 
 ## Starting and stopping
 
@@ -45,6 +58,8 @@ docker compose down
 docker compose down -v
 ```
 
+**SECTION 04**
+
 ## Inspecting logs
 
 ```powershell
@@ -60,6 +75,8 @@ docker compose -f infra/docker-compose.yml logs db
 
 Logs are not persisted outside the container by default. A log-shipping pattern (filebeat or vector to a central sink) is on the Phase 2 backlog.
 
+**SECTION 05**
+
 ## Triggering a UDL ingest
 
 The analyst-facing path is the dashboard:
@@ -71,9 +88,18 @@ The analyst-facing path is the dashboard:
 5. Click **Pull from UDL**.
 6. Wait for the success banner. The table reloads automatically.
 
-The operator-facing path is the API:
+The operator-facing path is the API. You need a bearer token; either sign in via the UI and copy the access token from `localStorage`, or call `/auth/login` first.
 
 ```powershell
+$login = Invoke-RestMethod `
+  -Uri "https://<host>/api/v1/auth/login" `
+  -Method POST `
+  -Body (@{ username = "ops"; password = "<secret>" } | ConvertTo-Json) `
+  -ContentType "application/json" `
+  -SkipCertificateCheck
+
+$token = $login.access_token
+
 $body = @{
   epoch_gte = "2026-05-20T00:00:00Z"
   sat_no = 25544
@@ -85,6 +111,7 @@ Invoke-RestMethod `
   -Method POST `
   -Body $body `
   -ContentType "application/json" `
+  -Headers @{ Authorization = "Bearer $token" } `
   -SkipCertificateCheck
 ```
 
@@ -94,7 +121,7 @@ Response shape:
 { "pulled": 17, "inserted": 12, "updated": 5, "skipped": 0 }
 ```
 
-Once JWT auth lands this endpoint will require a bearer token.
+**SECTION 06**
 
 ## Inspecting ingest history
 
@@ -107,12 +134,14 @@ docker compose -f infra/docker-compose.yml exec db psql -U ops_user -d ops_dashb
 In `psql`:
 
 ```sql
-SELECT timestamp, detail::text
+SELECT timestamp, user_id, ip_address, detail::text
   FROM audit.audit_log
  WHERE action_type = 'udl.elset.ingest'
  ORDER BY timestamp DESC
  LIMIT 20;
 ```
+
+**SECTION 07**
 
 ## Database operations
 
@@ -128,6 +157,7 @@ docker compose -f infra/docker-compose.yml exec db psql -U ops_user -d ops_dashb
 \dt public.*
 \dt audit.*
 \d public.elset
+\d public.app_user
 ```
 
 ### Apply pending migrations
@@ -144,9 +174,20 @@ alembic downgrade -1
 
 Only do this if you understand the data impact. Downgrades drop tables.
 
+### Reset an admin password
+
+```powershell
+cd backend
+python -m scripts.create_admin --username your.username --password '<new-secret>'
+```
+
+The script is idempotent; running it for an existing user resets the password and ensures the role stays `admin`.
+
 ### Manual integrity check on the audit chain
 
 There is no helper utility yet. To spot-check, walk the chain by `timestamp ASC`, recompute `sha256(previous_hash || canonical_json(payload))`, compare against `entry_hash`. Full mechanics in [docs/audit/overview.md](../audit/overview.md).
+
+**SECTION 08**
 
 ## Common failures and fixes
 
@@ -171,6 +212,12 @@ docker compose -f infra/docker-compose.yml logs --tail 200 db
 ```
 
 If the database is up, check that the backend's `POSTGRES_*` environment variables match the database's actual credentials.
+
+### Symptom: every protected endpoint returns 401
+
+Likely cause: `APP_SECRET_KEY` was rotated, invalidating every issued JWT. Expected behaviour. Tell users to sign in again.
+
+If you did not rotate the key, the user's token may have expired naturally (30 minutes) and the refresh token is also gone. Same answer: sign in again.
 
 ### Symptom: UDL ingest returns HTTP 502 with "UDL rejected credentials"
 
@@ -208,7 +255,13 @@ alembic history      # the chain between them
 
 If the database is behind, `alembic upgrade head`. If the codebase is ahead by more than one revision, walk forward with `alembic upgrade +1` to spot any single migration that misbehaves.
 
+**SECTION 09**
+
 ## Disaster scenarios
+
+> **KEY DECISION**
+>
+> If audit log integrity is ever in doubt, stop the backend before doing anything else. Take a database snapshot before any remediation. The hash chain is forensic evidence; preserve it.
 
 ### Database container will not start
 
@@ -233,9 +286,19 @@ If a real credential lands in a commit:
 2. Force-rewrite history is rarely the right move; treat the credential as already compromised.
 3. File an incident note in the team channel.
 
+### Suspected stolen refresh token
+
+Today, the only way to invalidate every issued JWT is to rotate `APP_SECRET_KEY` and restart the backend. Every active user will need to sign in again.
+
+A revocation list landing on the Phase 1 backlog removes this hammer in favour of targeted forced sign-out.
+
+**SECTION 10**
+
 ## See also
 
 ● [Architecture overview](../architecture/overview.md)
 ● [Security overview](../security/overview.md)
 ● [Audit logging overview](../audit/overview.md)
 ● [Analyst training manual](../user-handbook/training-manual.md)
+
+Bluestaq Limited | Daily Operations Dashboard documentation | 2026 | **COMMERCIAL IN CONFIDENCE**

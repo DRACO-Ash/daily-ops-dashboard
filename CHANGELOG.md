@@ -1,7 +1,12 @@
+**BLUESTAQ LIMITED** | Changelog | **COMMERCIAL IN CONFIDENCE**
+
 # Changelog
 
-**Classification:** Unclassified
+**Document classification:** Commercial in Confidence
+**Data classification:** Unclassified (per ADR-006)
 **Owner:** Daily Operations Dashboard Team, Bluestaq Limited
+**Version:** 0.2
+**Last updated:** 2026-05-28
 
 All notable changes to the Daily Operations Dashboard are recorded here. The format follows the spirit of [Keep a Changelog](https://keepachangelog.com/en/1.1.0/) without strict adherence. Versions follow [Semantic Versioning](https://semver.org/) once a first tagged release lands; until then, the **Unreleased** section captures work on `main`.
 
@@ -22,11 +27,12 @@ All notable changes to the Daily Operations Dashboard are recorded here. The for
 ● Audit writer with SHA-256 hash chain and Postgres advisory-lock concurrency control.
 ● Alembic configuration (`alembic.ini`, `migrations/env.py`, `migrations/script.py.mako`).
 ● Backend tests covering the UDL client (happy path, 401, 500, non-list responses, missing credentials, epoch formatting) and the UDL-to-model field mapping.
-● Documentation: README, architecture overview, data model, security overview, audit overview, developer setup, operator manual, analyst training manual, Phase 1 roadmap, this changelog.
+● Documentation set: README, architecture overview, data model, security overview, audit overview, developer setup, operator manual, analyst training manual, Phase 1 roadmap, this changelog.
 ● Decision log entries ADR-007 (UDL ingest pattern), ADR-008 (hash-chained audit), ADR-009 (frontend auth stubbed, now superseded).
 
 ### Changed
 
+● **Documentation aligned to the Bluestaq Ltd Document Design and Narrative Style Guide v3 (March 2026).** Every doc now carries the brand-banner top line, the metadata block, `**SECTION NN**` eyebrows before every H2 (or `**ADR-NNN**` in the decision log), copper and blue callout patterns where they earn their place, and the standard footer line. Version bumped to 0.2 across the set.
 ● `Settings` now exposes `UDL_USERNAME`, `UDL_PASSWORD`, `UDL_REQUEST_TIMEOUT_SECONDS`, and `UDL_VERIFY_SSL`.
 ● `.env.example` mirrors the new UDL configuration.
 
@@ -48,3 +54,5 @@ All notable changes to the Daily Operations Dashboard are recorded here. The for
 ## Prior history
 
 Captured in git log up to `18fff46` (Merge pull request #1, CI pipeline check).
+
+Bluestaq Limited | Daily Operations Dashboard documentation | 2026 | **COMMERCIAL IN CONFIDENCE**

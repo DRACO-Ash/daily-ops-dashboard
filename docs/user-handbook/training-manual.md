@@ -1,16 +1,27 @@
+**BLUESTAQ LIMITED** | Analyst Training Manual | **COMMERCIAL IN CONFIDENCE**
+
 # Analyst Training Manual
 
-**Classification:** Unclassified
+**Document classification:** Commercial in Confidence
+**Data classification:** Unclassified (per ADR-006)
 **Owner:** Daily Operations Dashboard Team, Bluestaq Limited
-**Version:** 0.1
-**Last updated:** 2026-05-27
+**Version:** 0.2
+**Last updated:** 2026-05-28
 **Audience:** Watch analysts new to the Daily Operations Dashboard, plus the trainers delivering induction. Sections labelled **Trainer note** are for delivery, not for the trainee handout.
+
+> **BLUF**
+>
+> A watch-stand surface that pulls live UDL data into one tab. Today: element sets. Soon: NOTSO, TACREP, Mattermost, ClickUp, procedure documents. This manual walks the trainee through sign-in, the Element sets surface, common workflows, and what is on the way.
+
+**SECTION 01**
 
 ## What this dashboard is for
 
 The Daily Operations Dashboard is your watch-stand surface. It pulls live operational data from the Unified Data Library (UDL) and renders it in a way you can search, filter, and act on without leaving the tab. As more sources come online (Notice to Space Operators, Tactical Reports, Mattermost activity, ClickUp tasks, procedure documents), they will all appear here.
 
 **Why care?** Time-on-task during a watch is the metric. Every minute you save on stitching context together is a minute back on actual analysis.
+
+**SECTION 02**
 
 ## Glossary
 
@@ -29,7 +40,11 @@ The Daily Operations Dashboard is your watch-stand surface. It pulls live operat
 | **Inclination** | Degrees between the orbit plane and the equator. 0 is equatorial, 90 is polar. |
 | **RAAN** | Right Ascension of Ascending Node. Where the orbit crosses the equator going north. |
 
-**Trainer note:** Walk the trainee through the glossary before logging in. Roughly five minutes. Use the ISS (`25544`) as a worked example since it appears in every UDL training set.
+> **TRAINER NOTE**
+>
+> Walk the trainee through the glossary before logging in. Roughly five minutes. Use the ISS (`25544`) as a worked example since it appears in every UDL training set.
+
+**SECTION 03**
 
 ## Signing in
 
@@ -37,9 +52,13 @@ The Daily Operations Dashboard is your watch-stand surface. It pulls live operat
 2. Enter your username and password.
 3. You arrive on the **Dashboard** landing page.
 
-**Current limitation:** Authentication is stubbed during Phase 1. Any non-empty username is accepted. Real password validation lands in the next slice. Until then, sign in with your normal username and any password.
+Your account is created for you by an administrator before your first watch. There is no public sign-up. If you do not have credentials yet, ask the on-call operator.
 
-**Trainer note:** Make clear to the trainee that this is temporary. Show them the audit log row that gets created on every action, so they understand that "no auth" does not mean "no accountability".
+> **TRAINER NOTE**
+>
+> Stress that every action the trainee takes from this point forward is recorded against their `user_id` in the audit log. The dashboard is not anonymous and is not intended to be.
+
+**SECTION 04**
 
 ## The Dashboard landing page
 
@@ -48,6 +67,8 @@ The landing page lists the data surfaces available to you. At launch:
 ● **Element sets** — UDL orbital state vectors.
 
 More land each sprint.
+
+**SECTION 05**
 
 ## The Element sets page
 
@@ -77,7 +98,9 @@ You will not always need to pull. Background scheduled ingest is on the backlog.
 ● **Updated** — records UDL has refreshed since we last saw them. The new version overwrites the old.
 ● **Skipped** — records UDL returned without the minimum fields we need (an `id`, a `satNo`, an `epoch`). These are not lost upstream; we just do not store them.
 
-**Trainer note:** Have the trainee pull for ISS (`satNo=25544`) with an "epoch since" of a week ago. The result is usually under 20 rows: small enough to look at, big enough to learn from. This also gives you a stable demo for every cohort.
+> **TRAINER NOTE**
+>
+> Have the trainee pull for ISS (`satNo=25544`) with an "epoch since" of a week ago. The result is usually under 20 rows: small enough to look at, big enough to learn from. This also gives you a stable demo for every cohort.
 
 ### Reading the results table
 
@@ -102,6 +125,8 @@ Records you cannot see in the table are still in the database (raw payload prese
 
 The table is currently fixed to **epoch descending** (most recent first). Sortable columns are on the backlog.
 
+**SECTION 06**
+
 ## Common analyst workflows
 
 ### Workflow 1: "Has UDL got anything new on object 25544 today?"
@@ -117,7 +142,11 @@ The table is currently fixed to **epoch descending** (most recent first). Sortab
 2. Read the banner. **Inserted** is the new traffic.
 3. Filter and read as needed.
 
-**Trainer note:** This is a good moment to remind the trainee that every pull they trigger appears in the audit log. Encourage them to think about pulls as deliberate operational events, not background polling.
+> **TRAINER NOTE**
+>
+> Good moment to remind the trainee that every pull they trigger appears in the audit log with their `user_id` and the IP they hit the dashboard from. Encourage them to think about pulls as deliberate operational events, not background polling.
+
+**SECTION 07**
 
 ## What the dashboard does not do (yet)
 
@@ -129,16 +158,20 @@ The table is currently fixed to **epoch descending** (most recent first). Sortab
 
 If you find yourself wishing the dashboard did something it does not, tell the team. The backlog is a living thing.
 
+**SECTION 08**
+
 ## When something goes wrong
 
 | Symptom | Action |
 |---------|--------|
 | Page will not load | Refresh. Then check the dashboard status with whoever runs the host. |
-| Sign-in fails | The auth stub accepts any non-empty username. If even that fails, the backend is probably down. Report it. |
+| Sign-in fails | Confirm with an administrator that your account is active. If you signed in earlier today and are bounced back to login, your session has expired; sign in again. |
 | **Pull from UDL** shows a red error banner | The message will say what failed. UDL rejected credentials, UDL is unreachable, or UDL returned an unexpected shape. Either way, ask the operator to check `UDL_USERNAME`, `UDL_PASSWORD`, and the UDL status. |
 | Table is empty when you expect rows | Confirm your filter is what you think. The empty-state message says "No element sets to show." Clear the filter and check again. |
 
 The operator-facing playbook for these is in [docs/runbook/operator-manual.md](../runbook/operator-manual.md).
+
+**SECTION 09**
 
 ## Trainer notes: delivering this material
 
@@ -150,11 +183,16 @@ The operator-facing playbook for these is in [docs/runbook/operator-manual.md](.
 
   | Question | Answer |
   |---|---|
-  | "Why is the sign-in so loose?" | Stubbed during Phase 1. Real authentication is the next slice. Auditing still applies. |
+  | "How long is my session?" | 30-minute access tokens, refreshed transparently for 7 days. Restart-of-shift sign-in is normal. |
   | "Where are NOTSOs and TACREPs?" | Same pattern, later sprints. |
   | "Can I delete a pull?" | No. Records can be overwritten by a fresher pull, but rows are not removed by the application. The audit log is append-only. |
   | "What if UDL changes the schema?" | We store the raw payload. Nothing is lost. New typed columns may follow in a migration. |
+  | "Is anyone watching what I do?" | The audit log is watching. Every action is attributed to you. Use the dashboard accordingly. |
+
+**SECTION 10**
 
 ## Feedback
 
 The dashboard exists to make watch easier. If anything on this page is unclear, or if a workflow is missing, tell the team in `#ops-dashboard` (Mattermost) or open an issue. Phase 1 is the moment to shape the surface.
+
+Bluestaq Limited | Daily Operations Dashboard documentation | 2026 | **COMMERCIAL IN CONFIDENCE**
