@@ -24,9 +24,11 @@ function formatDetail(detail: string | null): string {
 
 function extractErrorMessage(err: unknown, fallback: string): string {
   if (err && typeof err === "object" && "response" in err) {
-    const response = (err as {
-      response?: { data?: { detail?: unknown }; status?: number };
-    }).response;
+    const response = (
+      err as {
+        response?: { data?: { detail?: unknown }; status?: number };
+      }
+    ).response;
     if (response?.status === 403) {
       return "Insufficient privileges. Operator or admin role required.";
     }
@@ -89,7 +91,8 @@ export default function AuditLogPage() {
     <div>
       <h1>Audit log</h1>
       <p className="muted-paragraph">
-        Append-only, tamper-evident record of every state-changing action. Visible to operators and administrators only.
+        Append-only, tamper-evident record of every state-changing action. Visible to operators and
+        administrators only.
       </p>
 
       <section className="card">

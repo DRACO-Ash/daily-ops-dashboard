@@ -117,7 +117,11 @@ export default function ElsetDetailPage() {
       {(item.line1 || item.line2) && (
         <section className="card">
           <h2>Two-Line Element</h2>
-          <pre className="tle">{item.line1 ?? ""}{"\n"}{item.line2 ?? ""}</pre>
+          <pre className="tle">
+            {item.line1 ?? ""}
+            {"\n"}
+            {item.line2 ?? ""}
+          </pre>
         </section>
       )}
 

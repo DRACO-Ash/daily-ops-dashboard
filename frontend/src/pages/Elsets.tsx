@@ -2,12 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { listElsets, triggerElsetIngest } from "../api/elsets";
 import SortableHeader from "../components/SortableHeader";
-import type {
-  Elset,
-  ElsetIngestResponse,
-  ElsetSortColumn,
-  SortDirection,
-} from "../types";
+import type { Elset, ElsetIngestResponse, ElsetSortColumn, SortDirection } from "../types";
 
 const PAGE_SIZE = 50;
 
@@ -171,7 +166,8 @@ export default function ElsetsPage() {
         </form>
         {ingestResult && (
           <div className="ingest-result">
-            Pulled {ingestResult.pulled} &middot; Inserted {ingestResult.inserted} &middot; Updated {ingestResult.updated} &middot; Skipped {ingestResult.skipped}
+            Pulled {ingestResult.pulled} &middot; Inserted {ingestResult.inserted} &middot; Updated{" "}
+            {ingestResult.updated} &middot; Skipped {ingestResult.skipped}
           </div>
         )}
       </section>
@@ -258,9 +254,7 @@ export default function ElsetsPage() {
                 onClick={() => navigate(`/elsets/${it.id}`)}
               >
                 <td>{it.sat_no}</td>
-                <td>
-                  {new Date(it.epoch).toISOString().replace("T", " ").slice(0, 19)}
-                </td>
+                <td>{new Date(it.epoch).toISOString().replace("T", " ").slice(0, 19)}</td>
                 <td>{formatNumber(it.mean_motion)}</td>
                 <td>{formatNumber(it.eccentricity)}</td>
                 <td>{formatNumber(it.inclination, 4)}</td>

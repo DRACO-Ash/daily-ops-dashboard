@@ -2,12 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { listNotsos, triggerNotsoIngest } from "../api/notsos";
 import SortableHeader from "../components/SortableHeader";
-import type {
-  Notso,
-  NotsoIngestResponse,
-  NotsoSortColumn,
-  SortDirection,
-} from "../types";
+import type { Notso, NotsoIngestResponse, NotsoSortColumn, SortDirection } from "../types";
 
 const PAGE_SIZE = 50;
 
@@ -158,7 +153,8 @@ export default function NotsosPage() {
         </form>
         {ingestResult && (
           <div className="ingest-result">
-            Pulled {ingestResult.pulled} &middot; Inserted {ingestResult.inserted} &middot; Updated {ingestResult.updated} &middot; Skipped {ingestResult.skipped}
+            Pulled {ingestResult.pulled} &middot; Inserted {ingestResult.inserted} &middot; Updated{" "}
+            {ingestResult.updated} &middot; Skipped {ingestResult.skipped}
           </div>
         )}
       </section>

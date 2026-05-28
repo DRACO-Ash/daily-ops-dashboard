@@ -36,10 +36,9 @@ function notsoToSurfaceStats(total: number, items: Notso[]): SurfaceStats {
       ? {
           id: latest.id,
           label: latest.notice_id ?? "NOTSO",
-          subtitle:
-            latest.msg_type
-              ? `${latest.msg_type} · ${formatDateTime(latest.effective_from)}`
-              : formatDateTime(latest.effective_from),
+          subtitle: latest.msg_type
+            ? `${latest.msg_type} · ${formatDateTime(latest.effective_from)}`
+            : formatDateTime(latest.effective_from),
         }
       : null,
   };

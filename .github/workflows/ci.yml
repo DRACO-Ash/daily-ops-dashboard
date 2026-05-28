@@ -21,8 +21,8 @@ jobs:
       - run: ruff check backend/app
       - run: mypy backend/app
       - run: bandit -r backend/app -ll
-      - run: pip install pytest pytest-asyncio httpx
-      - run: pytest tests/backend
+      - run: pip install pytest pytest-asyncio pytest-cov httpx
+      - run: pytest tests/backend --cov=app --cov-report=term --cov-fail-under=40
         env:
           PYTHONPATH: backend
           APP_SECRET_KEY: test-secret-key-for-ci-only
@@ -46,6 +46,7 @@ jobs:
           node-version: "20"
       - run: cd frontend && npm ci
       - run: cd frontend && npm run lint
+      - run: cd frontend && npm run format:check
       - run: cd frontend && npm run test
 
   secrets:

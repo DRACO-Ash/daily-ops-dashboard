@@ -1,14 +1,14 @@
 :root {
   --color-navy: #162646;
-  --color-blue-1: #385FAF;
-  --color-blue-2: #739BCF;
-  --color-green: #27AE60;
-  --color-body: #2C3E50;
-  --color-bg: #F5F7FA;
-  --color-surface: #FFFFFF;
-  --color-border: #DDE3EA;
-  --color-muted: #6B7785;
-  --color-error: #B23A48;
+  --color-blue-1: #385faf;
+  --color-blue-2: #739bcf;
+  --color-green: #27ae60;
+  --color-body: #2c3e50;
+  --color-bg: #f5f7fa;
+  --color-surface: #ffffff;
+  --color-border: #dde3ea;
+  --color-muted: #6b7785;
+  --color-error: #b23a48;
 
   --space-1: 4px;
   --space-2: 8px;
@@ -23,9 +23,13 @@
   --font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
 }
 
-* { box-sizing: border-box; }
+* {
+  box-sizing: border-box;
+}
 
-html, body, #root {
+html,
+body,
+#root {
   margin: 0;
   padding: 0;
   height: 100%;
@@ -37,7 +41,9 @@ body {
   color: var(--color-body);
 }
 
-a { color: var(--color-blue-1); }
+a {
+  color: var(--color-blue-1);
+}
 
 .app-shell {
   display: flex;
@@ -54,7 +60,9 @@ a { color: var(--color-blue-1); }
   color: white;
 }
 
-.app-title { font-weight: 600; }
+.app-title {
+  font-weight: 600;
+}
 
 .logout-btn {
   background: transparent;
@@ -65,7 +73,11 @@ a { color: var(--color-blue-1); }
   cursor: pointer;
 }
 
-.app-body { display: flex; flex: 1; overflow: hidden; }
+.app-body {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
 
 .app-nav {
   width: 220px;
@@ -84,7 +96,9 @@ a { color: var(--color-blue-1); }
   color: var(--color-body);
 }
 
-.nav-link:hover { background: var(--color-bg); }
+.nav-link:hover {
+  background: var(--color-bg);
+}
 
 .nav-link.active {
   background: var(--color-blue-2);
@@ -110,7 +124,8 @@ a { color: var(--color-blue-1); }
   color: var(--color-navy);
 }
 
-.filter-form, .ingest-form {
+.filter-form,
+.ingest-form {
   display: flex;
   align-items: end;
   gap: var(--space-3);
@@ -118,14 +133,18 @@ a { color: var(--color-blue-1); }
   margin-bottom: var(--space-3);
 }
 
-.filter-form label, .ingest-form label, .login-form label {
+.filter-form label,
+.ingest-form label,
+.login-form label {
   display: flex;
   flex-direction: column;
   font-size: 0.875rem;
   color: var(--color-muted);
 }
 
-.filter-form input, .ingest-form input, .login-form input {
+.filter-form input,
+.ingest-form input,
+.login-form input {
   margin-top: var(--space-1);
   padding: var(--space-2) var(--space-3);
   border: 1px solid var(--color-border);
@@ -145,8 +164,13 @@ button {
   font-size: 0.95rem;
 }
 
-button:hover { background: var(--color-navy); }
-button:disabled { opacity: 0.6; cursor: not-allowed; }
+button:hover {
+  background: var(--color-navy);
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 
 .elsets-table {
   width: 100%;
@@ -155,13 +179,16 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   margin-top: var(--space-3);
 }
 
-.elsets-table th, .elsets-table td {
+.elsets-table th,
+.elsets-table td {
   text-align: left;
   padding: var(--space-2) var(--space-3);
   border-bottom: 1px solid var(--color-border);
 }
 
-.elsets-table thead { background: var(--color-bg); }
+.elsets-table thead {
+  background: var(--color-bg);
+}
 
 .pagination {
   display: flex;
@@ -323,7 +350,9 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   padding: var(--space-4);
   text-decoration: none;
   color: inherit;
-  transition: transform 0.1s ease-in-out, box-shadow 0.1s ease-in-out;
+  transition:
+    transform 0.1s ease-in-out,
+    box-shadow 0.1s ease-in-out;
 }
 
 .surface-card:hover {

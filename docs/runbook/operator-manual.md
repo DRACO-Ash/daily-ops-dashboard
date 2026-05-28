@@ -34,6 +34,7 @@ When something is wrong, the operator's job is to find which of those four is un
 |-------|-----|---------------|
 | Dashboard reachable | Browse to `https://<host>` | Sign-in screen renders |
 | Backend health | `curl -k https://<host>/api/v1/health` | `{"status":"ok"}` HTTP 200 |
+| Component health | `curl -k https://<host>/api/v1/health/detailed` | Status `ok`, all components `ok`/`configured` |
 | Last ingest recent | See "Inspect ingest history" below | An audit row within expected cadence |
 | Containers up | `docker compose ps` | All four `Up` |
 | Disk space | `df -h` (Linux) or `Get-PSDrive C` (Windows) | Free space above local threshold |
@@ -201,6 +202,16 @@ docker compose -f infra/docker-compose.yml logs --tail 200 backend
 ```
 
 Look for stack traces, missing environment variables, or database connection failures.
+
+### Correlating logs to a specific request
+
+Every response carries an `X-Request-ID` header. Capture it (browser devtools, `curl -i`, or your client logs) and grep the backend logs for the same value to pull the full trace of that request.
+
+```powershell
+docker compose -f infra/docker-compose.yml logs backend | Select-String "request_id=<your-id>"
+```
+
+If a client supplies its own `X-Request-ID` header, the backend honours it and echoes it back. Useful when your monitoring layer already tags requests upstream.
 
 ### Symptom: `/api/v1/health` returns 500
 

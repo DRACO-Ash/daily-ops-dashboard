@@ -64,9 +64,7 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error: AxiosError) => {
     const status = error.response?.status;
-    const config = error.config as
-      | (AxiosRequestConfig & { _retry?: boolean })
-      | undefined;
+    const config = error.config as (AxiosRequestConfig & { _retry?: boolean }) | undefined;
 
     if (!config || status !== 401) {
       return Promise.reject(error);
