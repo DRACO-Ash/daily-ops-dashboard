@@ -114,7 +114,13 @@ For every audit row:
 
 ## Reading the audit log
 
-There is no UI for the audit log yet. To inspect from the database:
+### Through the dashboard (operator + admin)
+
+`GET /api/v1/audit` returns paginated audit rows. Role-gated to `operator` and `admin`; analysts receive HTTP 403. Query parameters: `action_type`, `user_id`, `since`, `until`, `limit`, `offset`. The dashboard's **Audit log** page (visible in the side nav for the relevant roles) wraps this endpoint with a filter form and a pagination control.
+
+### Direct database access (investigators)
+
+To inspect from the database:
 
 ```sql
 SELECT timestamp, action_type, entity_type, detail::text
@@ -150,7 +156,7 @@ Audit data is included in standard PostgreSQL backups. Backup frequency and rete
 ## Open items
 
 ● No verification utility exists yet. Investigators must currently recompute hashes manually.
-● No UI for analysts or operators to view audit history. CLI and direct SQL only for now.
 ● Audit retention policy (how long to keep audit rows before archiving) is undecided. Default behaviour is to keep everything forever.
+● The audit viewer is read-only. A "verify the chain" button that runs the integrity check from the UI is on the backlog.
 
 Bluestaq Limited | Daily Operations Dashboard documentation | 2026 | **COMMERCIAL IN CONFIDENCE**

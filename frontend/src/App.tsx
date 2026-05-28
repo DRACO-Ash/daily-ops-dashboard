@@ -2,6 +2,7 @@ import { BrowserRouter, Routes, Route } from "react-router-dom";
 import { AuthProvider } from "./context/AuthContext";
 import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
+import AuditLog from "./pages/AuditLog";
 import Dashboard from "./pages/Dashboard";
 import Elsets from "./pages/Elsets";
 import ElsetDetail from "./pages/ElsetDetail";
@@ -21,6 +22,7 @@ export default function App() {
             <Route path="/elsets/:id" element={<ElsetDetail />} />
             <Route path="/notsos" element={<Notsos />} />
             <Route path="/notsos/:id" element={<NotsoDetail />} />
+            <Route path="/audit" element={<AuditLog />} />
           </Route>
         </Routes>
       </BrowserRouter>

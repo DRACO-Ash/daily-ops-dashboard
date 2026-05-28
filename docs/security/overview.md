@@ -56,7 +56,13 @@ Subsequent users are created by administrators. A UI for that is on the backlog.
 
 ## Authorisation
 
-Role enum exists on the `User` model (`analyst`, `operator`, `admin`) and a `require_role(*roles)` factory lives in [backend/app/dependencies.py](../../backend/app/dependencies.py). It is not yet used on any route; every authenticated user has the same capabilities at the API surface. Role-based gating lands with the user management slice.
+Role enum exists on the `User` model (`analyst`, `operator`, `admin`) and a `require_role(*roles)` factory lives in [backend/app/dependencies.py](../../backend/app/dependencies.py).
+
+Currently gated routes:
+
+● `GET /api/v1/audit` requires `operator` or `admin`. Analysts receive HTTP 403.
+
+All other routes are open to any authenticated user. Tighter gating lands with the user management UI.
 
 **SECTION 05**
 
@@ -64,7 +70,7 @@ Role enum exists on the `User` model (`analyst`, `operator`, `admin`) and a `req
 
 Every state-changing action writes an audit entry. The audit log is tamper-evident via a SHA-256 hash chain (ADR-008), with concurrent writes serialised by a Postgres advisory lock inside the transaction. Full details in [docs/audit/overview.md](../audit/overview.md).
 
-The `udl.elset.ingest` action type is emitted today. Auth-event action types (`auth.user.login`, `auth.user.logout`, `auth.token.refresh`) are in the taxonomy but not yet emitted; they ship in the next audit-attribution slice.
+All Active action types are emitted today: `udl.elset.ingest`, `udl.notso.ingest`, `auth.user.login`, `auth.user.logout`, `auth.token.refresh`. The viewer at `GET /api/v1/audit` (operator + admin only) exposes them through the dashboard's **Audit log** page.
 
 **SECTION 06**
 

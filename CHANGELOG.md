@@ -14,6 +14,7 @@ All notable changes to the Daily Operations Dashboard are recorded here. The for
 
 ### Added
 
+● **Audit log viewer.** New `GET /api/v1/audit` endpoint role-gated to `operator` and `admin` via the existing `require_role` factory. Filters by `action_type`, `user_id`, `since`, and `until`; paginated. Frontend Audit log page shows timestamp, action, entity, user, IP, and the parsed detail payload. AuthContext now fetches `/auth/me` on mount and exposes the current `user`; Layout filters the side nav by role so the audit link only appears for operators and admins.
 ● **UI polish.** Sortable column headers on the Element sets and NOTSOs list pages (click to toggle direction, with an arrow indicator). Detail pages at `/elsets/:id` and `/notsos/:id` showing parsed fields, the TLE for elsets, the description for NOTSOs, and the full raw UDL payload. Rows in the list pages are clickable and route through to the detail. Dashboard refreshed with live count cards for each surface (Element sets, NOTSOs) including the most recent record's label and timestamp.
 ● Backend list routes now accept `sort_by` and `sort_dir` query parameters (whitelisted via `Literal` types, validated by FastAPI). Defaults preserve previous behaviour (elsets by epoch desc, NOTSOs by effective_from desc).
 ● Reusable `SortableHeader` component, design tokens for sortable headers, clickable rows, detail-grid, raw-json, TLE block, NOTSO description block, and the dashboard surface cards.

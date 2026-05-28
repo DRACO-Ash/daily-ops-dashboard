@@ -1,9 +1,11 @@
-import { createContext, ReactNode, useContext, useState } from "react";
+import { createContext, ReactNode, useContext, useEffect, useState } from "react";
 import { ACCESS_TOKEN_KEY, REFRESH_TOKEN_KEY } from "../api/client";
-import { login as loginApi, logout as logoutApi } from "../api/auth";
+import { getCurrentUser, login as loginApi, logout as logoutApi } from "../api/auth";
+import type { User } from "../types";
 
 interface AuthContextValue {
   isAuthenticated: boolean;
+  user: User | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
 }
@@ -14,6 +16,25 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [accessToken, setAccessToken] = useState<string | null>(() =>
     localStorage.getItem(ACCESS_TOKEN_KEY),
   );
+  const [user, setUser] = useState<User | null>(null);
+
+  useEffect(() => {
+    if (!accessToken) {
+      setUser(null);
+      return;
+    }
+    let cancelled = false;
+    getCurrentUser()
+      .then((u) => {
+        if (!cancelled) setUser(u);
+      })
+      .catch(() => {
+        if (!cancelled) setUser(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [accessToken]);
 
   async function login(username: string, password: string) {
     const tokens = await loginApi({ username, password });
@@ -30,18 +51,18 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       } catch {
         // Best-effort: if the server-side revocation or audit write
         // fails, we still clear local state so the user is signed
-        // out from this browser. The refresh token will expire on
-        // its own schedule.
+        // out from this browser.
       }
     }
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);
     setAccessToken(null);
+    setUser(null);
   }
 
   return (
     <AuthContext.Provider
-      value={{ isAuthenticated: !!accessToken, login, logout }}
+      value={{ isAuthenticated: !!accessToken, user, login, logout }}
     >
       {children}
     </AuthContext.Provider>

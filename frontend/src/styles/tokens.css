@@ -350,3 +350,29 @@ button:disabled { opacity: 0.6; cursor: not-allowed; }
   color: var(--color-muted);
   line-height: 1.4;
 }
+
+.app-header-right {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+.app-user {
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 0.875rem;
+}
+
+.audit-detail {
+  font-family: "Consolas", "Courier New", monospace;
+  font-size: 0.8rem;
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--color-muted);
+}
+
+.muted-paragraph {
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
