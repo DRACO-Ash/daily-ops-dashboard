@@ -14,6 +14,9 @@ All notable changes to the Daily Operations Dashboard are recorded here. The for
 
 ### Added
 
+● **NOTSO ingest, end-to-end.** New `Notso` model and migration `0004_create_notso`, `UDLClient.get_notsos()`, `ingest_notsos` service mirroring the elset pattern, REST API at `/api/v1/notsos` (list with `msg_type` and `sat_no` filters, detail, and a manual ingest trigger). Frontend Notsos page with the same shape as Element sets. Action type `udl.notso.ingest` is now Active in the audit taxonomy.
+● `UDLClient` factored to share a single `_get_list` helper between `get_elsets` and `get_notsos`. No behaviour change for the existing elset path.
+● Backend tests for the NOTSO UDL-to-model mapping (full record, datetime parsing across `effectiveFrom`/`effectiveUntil`/`expirationTime`/`createdAt`, raw payload preservation, missing-id skip, fallback aliases for `text` and `expirationTime`).
 ● Refresh-token rotation and JTI block-list (ADR-011). Every JWT now carries a `jti` claim. `POST /auth/refresh` rotates: it issues a new access AND a new refresh token and revokes the old refresh-token JTI in the `revoked_jti` table. A reused old refresh token is rejected with audit reason `revoked_token`. New alembic migration `0003_create_revoked_jti` adds the block-list table. New `app/services/token_revocation.py` exposes `is_revoked` and `revoke`.
 ● `POST /auth/logout` now takes the refresh token in its body (no access-token header required) and revokes its JTI. The audit row carries success or one of `invalid_token`, `missing_claim`, `malformed_subject`, `already_revoked`.
 ● Audit-log emission for auth events. `POST /auth/login` writes `auth.user.login` rows for both success and the three failure modes (unknown user, inactive user, wrong password); `POST /auth/refresh` writes `auth.token.refresh` rows for success and the new revoked-token failure reason. Action types are Active in the audit taxonomy.

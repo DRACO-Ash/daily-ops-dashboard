@@ -69,6 +69,35 @@ Stores UDL element sets ingested via the manual trigger or, in a later slice, by
 >
 > The raw payload is preserved in `raw` so that UDL schema additions are never lost on the way in. Typed columns mirror the fields analysts actually query against. See ADR-007 for the design rationale.
 
+### `notso`
+
+Stores UDL Notice to Space Operators records ingested via the manual trigger.
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| `id` | UUID | no | Primary key. |
+| `udl_id` | varchar(64) | yes | UDL's own identifier. Unique when present. Natural key for dedupe. |
+| `notice_id` | varchar(100) | yes | Notice identifier from UDL (`noticeId` or `noticeNumber`). Indexed. |
+| `msg_type` | varchar(50) | yes | Message type (`OPERATIONAL`, advisory, etc.). Indexed. |
+| `effective_from` | timestamptz | yes | When the notice begins to apply. Indexed. |
+| `effective_until` | timestamptz | yes | When the notice expires. |
+| `subject` | varchar(500) | yes | Short title. |
+| `description` | text | yes | Full notice body. |
+| `sat_no` | integer | yes | Associated NORAD catalogue number, when the notice is satellite-specific. Indexed. |
+| `region` | varchar(255) | yes | Area or region described by the notice. |
+| `classification_marking` | varchar(50) | yes | UDL classification (typically `U` for Unclassified). |
+| `data_mode` | varchar(20) | yes | UDL data mode (`REAL`, `TEST`, `SIMULATED`, `EXERCISE`). |
+| `source` | varchar(100) | yes | UDL source identifier. |
+| `udl_created_at` | timestamptz | yes | When UDL created the notice. |
+| `raw` | jsonb | no | Full UDL payload preserved verbatim. |
+| `created_at` | timestamptz | no | Row creation timestamp. |
+| `updated_at` | timestamptz | no | Row last-update timestamp, refreshed on upsert. |
+
+**Indexes**
+
+● `uq_notso_udl_id` — unique on `udl_id` for `INSERT ... ON CONFLICT` upsert.
+● `ix_notso_notice_id`, `ix_notso_msg_type`, `ix_notso_effective_from`, `ix_notso_sat_no` — query indexes.
+
 ### `app_user`
 
 Authenticated users of the dashboard. Created by the bootstrap script or future admin UI.
@@ -159,7 +188,6 @@ Hand-crafted migrations are preferred for the first migration of a new feature (
 
 Planned for follow-on slices:
 
-● `notso` — Notice to Space Operators.
 ● `tacrep` — Tactical Reports.
 ● `mattermost_message` — bot-collected operational chat.
 ● `procedure_doc` — uploaded analyst procedure documents.

@@ -88,7 +88,7 @@ Action types are dotted strings. The convention is `<domain>.<entity>.<verb>`. C
 | Action type | Description | Status |
 |-------------|-------------|--------|
 | `udl.elset.ingest` | UDL element-set ingest run completed. `detail` carries the request and the pulled/inserted/updated/skipped counts. | Active |
-| `udl.notso.ingest` | UDL Notice to Space Operators ingest run. | Planned |
+| `udl.notso.ingest` | UDL Notice to Space Operators ingest run completed. `detail` carries the request (`effective_from_gte`, `msg_type`, `max_results`) and the same counts as elset ingest. | Active |
 | `udl.tacrep.ingest` | UDL Tactical Report ingest run. | Planned |
 | `auth.user.login` | Login attempt. `detail.success` is true for successful login; false with `detail.reason` set to `unknown_user`, `inactive_user`, or `wrong_password` for failures. `user_id` is NULL only for `unknown_user`. | Active |
 | `auth.user.logout` | Logout attempt via `POST /auth/logout` (refresh token in body). `detail.success` true for success; false with `detail.reason` set to `invalid_token`, `missing_claim`, `malformed_subject`, or `already_revoked` for failures. | Active |

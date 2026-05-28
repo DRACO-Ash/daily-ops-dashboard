@@ -65,17 +65,34 @@ class UDLClient:
         sat_no: Optional[int] = None,
         max_results: Optional[int] = None,
     ) -> list[dict]:
-        if self._client is None:
-            raise UDLClientError("UDLClient must be used as an async context manager.")
-
         params: dict[str, Any] = {"epoch": f">={_format_epoch(epoch_gte)}"}
         if sat_no is not None:
             params["satNo"] = sat_no
         if max_results is not None:
             params["maxResults"] = max_results
+        return await self._get_list("/elset", params)
+
+    async def get_notsos(
+        self,
+        effective_from_gte: Optional[datetime] = None,
+        msg_type: Optional[str] = None,
+        max_results: Optional[int] = None,
+    ) -> list[dict]:
+        params: dict[str, Any] = {}
+        if effective_from_gte is not None:
+            params["effectiveFrom"] = f">={_format_epoch(effective_from_gte)}"
+        if msg_type is not None:
+            params["msgType"] = msg_type
+        if max_results is not None:
+            params["maxResults"] = max_results
+        return await self._get_list("/notso", params)
+
+    async def _get_list(self, path: str, params: dict[str, Any]) -> list[dict]:
+        if self._client is None:
+            raise UDLClientError("UDLClient must be used as an async context manager.")
 
         try:
-            response = await self._client.get("/elset", params=params)
+            response = await self._client.get(path, params=params)
         except httpx.HTTPError as exc:
             raise UDLClientError(f"UDL request failed: {exc}") from exc
 
