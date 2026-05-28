@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -23,6 +23,10 @@ from app.services.udl_client import UDLAuthError, UDLClient, UDLClientError
 
 router = APIRouter(prefix="/elsets", tags=["elsets"])
 
+ElsetSortColumn = Literal[
+    "sat_no", "epoch", "mean_motion", "eccentricity", "inclination", "source", "created_at"
+]
+
 
 @router.get("", response_model=ElsetPage)
 async def list_elsets(
@@ -31,6 +35,8 @@ async def list_elsets(
     epoch_lte: Optional[datetime] = Query(None),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    sort_by: ElsetSortColumn = Query("epoch"),
+    sort_dir: Literal["asc", "desc"] = Query("desc"),
     db: AsyncSession = Depends(get_db),
     _current_user: User = Depends(get_current_user),
 ) -> ElsetPage:
@@ -48,7 +54,9 @@ async def list_elsets(
     count_stmt = select(sa_func.count()).select_from(base.subquery())
     total = (await db.execute(count_stmt)).scalar_one()
 
-    items_stmt = base.order_by(Elset.epoch.desc()).limit(limit).offset(offset)
+    sort_column = getattr(Elset, sort_by)
+    order = sort_column.asc() if sort_dir == "asc" else sort_column.desc()
+    items_stmt = base.order_by(order.nullslast()).limit(limit).offset(offset)
     items_result = await db.execute(items_stmt)
     items = items_result.scalars().all()
 

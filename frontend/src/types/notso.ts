@@ -41,6 +41,14 @@ export interface NotsoIngestResponse {
   skipped: number;
 }
 
+export type NotsoSortColumn =
+  | "notice_id"
+  | "msg_type"
+  | "effective_from"
+  | "effective_until"
+  | "sat_no"
+  | "created_at";
+
 export interface NotsoListQuery {
   msg_type?: string;
   sat_no?: number;
@@ -48,4 +56,6 @@ export interface NotsoListQuery {
   effective_from_lte?: string;
   limit?: number;
   offset?: number;
+  sort_by?: NotsoSortColumn;
+  sort_dir?: "asc" | "desc";
 }

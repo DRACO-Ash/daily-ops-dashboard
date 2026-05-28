@@ -50,10 +50,23 @@ export interface ElsetIngestResponse {
   skipped: number;
 }
 
+export type ElsetSortColumn =
+  | "sat_no"
+  | "epoch"
+  | "mean_motion"
+  | "eccentricity"
+  | "inclination"
+  | "source"
+  | "created_at";
+
+export type SortDirection = "asc" | "desc";
+
 export interface ElsetListQuery {
   sat_no?: number;
   epoch_gte?: string;
   epoch_lte?: string;
   limit?: number;
   offset?: number;
+  sort_by?: ElsetSortColumn;
+  sort_dir?: SortDirection;
 }

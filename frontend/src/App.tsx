@@ -4,8 +4,10 @@ import ProtectedRoute from "./components/ProtectedRoute";
 import Layout from "./components/Layout";
 import Dashboard from "./pages/Dashboard";
 import Elsets from "./pages/Elsets";
+import ElsetDetail from "./pages/ElsetDetail";
 import Login from "./pages/Login";
 import Notsos from "./pages/Notsos";
+import NotsoDetail from "./pages/NotsoDetail";
 
 export default function App() {
   return (
@@ -16,7 +18,9 @@ export default function App() {
           <Route element={<ProtectedRoute><Layout /></ProtectedRoute>}>
             <Route path="/" element={<Dashboard />} />
             <Route path="/elsets" element={<Elsets />} />
+            <Route path="/elsets/:id" element={<ElsetDetail />} />
             <Route path="/notsos" element={<Notsos />} />
+            <Route path="/notsos/:id" element={<NotsoDetail />} />
           </Route>
         </Routes>
       </BrowserRouter>

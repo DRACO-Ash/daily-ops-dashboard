@@ -1,6 +1,13 @@
 import { FormEvent, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { listNotsos, triggerNotsoIngest } from "../api/notsos";
-import type { Notso, NotsoIngestResponse } from "../types";
+import SortableHeader from "../components/SortableHeader";
+import type {
+  Notso,
+  NotsoIngestResponse,
+  NotsoSortColumn,
+  SortDirection,
+} from "../types";
 
 const PAGE_SIZE = 50;
 
@@ -20,11 +27,14 @@ function extractErrorMessage(err: unknown, fallback: string): string {
 }
 
 export default function NotsosPage() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<Notso[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [msgTypeFilter, setMsgTypeFilter] = useState<string | undefined>(undefined);
   const [msgTypeInput, setMsgTypeInput] = useState("");
+  const [sortColumn, setSortColumn] = useState<NotsoSortColumn>("effective_from");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [reloadToken, setReloadToken] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +55,8 @@ export default function NotsosPage() {
           msg_type: msgTypeFilter,
           limit: PAGE_SIZE,
           offset,
+          sort_by: sortColumn,
+          sort_dir: sortDirection,
         });
         if (!cancelled) {
           setItems(page.items);
@@ -62,7 +74,17 @@ export default function NotsosPage() {
     return () => {
       cancelled = true;
     };
-  }, [msgTypeFilter, offset, reloadToken]);
+  }, [msgTypeFilter, offset, sortColumn, sortDirection, reloadToken]);
+
+  function onSortChange(column: NotsoSortColumn) {
+    if (column === sortColumn) {
+      setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortColumn(column);
+      setSortDirection("desc");
+    }
+    setOffset(0);
+  }
 
   function onFilterSubmit(event: FormEvent) {
     event.preventDefault();
@@ -171,17 +193,51 @@ export default function NotsosPage() {
         <table className="elsets-table">
           <thead>
             <tr>
-              <th>Notice</th>
-              <th>Type</th>
-              <th>Effective from</th>
-              <th>Effective until</th>
-              <th>Sat No</th>
+              <SortableHeader
+                column="notice_id"
+                label="Notice"
+                activeColumn={sortColumn}
+                activeDirection={sortDirection}
+                onChange={onSortChange}
+              />
+              <SortableHeader
+                column="msg_type"
+                label="Type"
+                activeColumn={sortColumn}
+                activeDirection={sortDirection}
+                onChange={onSortChange}
+              />
+              <SortableHeader
+                column="effective_from"
+                label="Effective from"
+                activeColumn={sortColumn}
+                activeDirection={sortDirection}
+                onChange={onSortChange}
+              />
+              <SortableHeader
+                column="effective_until"
+                label="Effective until"
+                activeColumn={sortColumn}
+                activeDirection={sortDirection}
+                onChange={onSortChange}
+              />
+              <SortableHeader
+                column="sat_no"
+                label="Sat No"
+                activeColumn={sortColumn}
+                activeDirection={sortDirection}
+                onChange={onSortChange}
+              />
               <th>Subject</th>
             </tr>
           </thead>
           <tbody>
             {items.map((it) => (
-              <tr key={it.id}>
+              <tr
+                key={it.id}
+                className="clickable-row"
+                onClick={() => navigate(`/notsos/${it.id}`)}
+              >
                 <td>{it.notice_id ?? "n/a"}</td>
                 <td>{it.msg_type ?? "n/a"}</td>
                 <td>{formatDateTime(it.effective_from)}</td>

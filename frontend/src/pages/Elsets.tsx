@@ -1,6 +1,13 @@
 import { FormEvent, useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
 import { listElsets, triggerElsetIngest } from "../api/elsets";
-import type { Elset, ElsetIngestResponse } from "../types";
+import SortableHeader from "../components/SortableHeader";
+import type {
+  Elset,
+  ElsetIngestResponse,
+  ElsetSortColumn,
+  SortDirection,
+} from "../types";
 
 const PAGE_SIZE = 50;
 
@@ -20,11 +27,14 @@ function extractErrorMessage(err: unknown, fallback: string): string {
 }
 
 export default function ElsetsPage() {
+  const navigate = useNavigate();
   const [items, setItems] = useState<Elset[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
   const [satNoFilter, setSatNoFilter] = useState<number | undefined>(undefined);
   const [satNoInput, setSatNoInput] = useState("");
+  const [sortColumn, setSortColumn] = useState<ElsetSortColumn>("epoch");
+  const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [reloadToken, setReloadToken] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -45,6 +55,8 @@ export default function ElsetsPage() {
           sat_no: satNoFilter,
           limit: PAGE_SIZE,
           offset,
+          sort_by: sortColumn,
+          sort_dir: sortDirection,
         });
         if (!cancelled) {
           setItems(page.items);
@@ -62,7 +74,17 @@ export default function ElsetsPage() {
     return () => {
       cancelled = true;
     };
-  }, [satNoFilter, offset, reloadToken]);
+  }, [satNoFilter, offset, sortColumn, sortDirection, reloadToken]);
+
+  function onSortChange(column: ElsetSortColumn) {
+    if (column === sortColumn) {
+      setSortDirection((d) => (d === "asc" ? "desc" : "asc"));
+    } else {
+      setSortColumn(column);
+      setSortDirection("desc");
+    }
+    setOffset(0);
+  }
 
   function onFilterSubmit(event: FormEvent) {
     event.preventDefault();
@@ -184,17 +206,57 @@ export default function ElsetsPage() {
         <table className="elsets-table">
           <thead>
             <tr>
-              <th>Sat No</th>
-              <th>Epoch</th>
-              <th>Mean motion</th>
-              <th>Eccentricity</th>
-              <th>Inclination</th>
-              <th>Source</th>
+              <SortableHeader
+                column="sat_no"
+                label="Sat No"
+                activeColumn={sortColumn}
+                activeDirection={sortDirection}
+                onChange={onSortChange}
+              />
+              <SortableHeader
+                column="epoch"
+                label="Epoch"
+                activeColumn={sortColumn}
+                activeDirection={sortDirection}
+                onChange={onSortChange}
+              />
+              <SortableHeader
+                column="mean_motion"
+                label="Mean motion"
+                activeColumn={sortColumn}
+                activeDirection={sortDirection}
+                onChange={onSortChange}
+              />
+              <SortableHeader
+                column="eccentricity"
+                label="Eccentricity"
+                activeColumn={sortColumn}
+                activeDirection={sortDirection}
+                onChange={onSortChange}
+              />
+              <SortableHeader
+                column="inclination"
+                label="Inclination"
+                activeColumn={sortColumn}
+                activeDirection={sortDirection}
+                onChange={onSortChange}
+              />
+              <SortableHeader
+                column="source"
+                label="Source"
+                activeColumn={sortColumn}
+                activeDirection={sortDirection}
+                onChange={onSortChange}
+              />
             </tr>
           </thead>
           <tbody>
             {items.map((it) => (
-              <tr key={it.id}>
+              <tr
+                key={it.id}
+                className="clickable-row"
+                onClick={() => navigate(`/elsets/${it.id}`)}
+              >
                 <td>{it.sat_no}</td>
                 <td>
                   {new Date(it.epoch).toISOString().replace("T", " ").slice(0, 19)}

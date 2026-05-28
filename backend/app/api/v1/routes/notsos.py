@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
@@ -23,6 +23,10 @@ from app.services.udl_client import UDLAuthError, UDLClient, UDLClientError
 
 router = APIRouter(prefix="/notsos", tags=["notsos"])
 
+NotsoSortColumn = Literal[
+    "notice_id", "msg_type", "effective_from", "effective_until", "sat_no", "created_at"
+]
+
 
 @router.get("", response_model=NotsoPage)
 async def list_notsos(
@@ -32,6 +36,8 @@ async def list_notsos(
     effective_from_lte: Optional[datetime] = Query(None),
     limit: int = Query(50, ge=1, le=500),
     offset: int = Query(0, ge=0),
+    sort_by: NotsoSortColumn = Query("effective_from"),
+    sort_dir: Literal["asc", "desc"] = Query("desc"),
     db: AsyncSession = Depends(get_db),
     _current_user: User = Depends(get_current_user),
 ) -> NotsoPage:
@@ -51,10 +57,10 @@ async def list_notsos(
     count_stmt = select(sa_func.count()).select_from(base.subquery())
     total = (await db.execute(count_stmt)).scalar_one()
 
+    sort_column = getattr(Notso, sort_by)
+    order = sort_column.asc() if sort_dir == "asc" else sort_column.desc()
     items_stmt = (
-        base.order_by(Notso.effective_from.desc().nullslast(), Notso.created_at.desc())
-        .limit(limit)
-        .offset(offset)
+        base.order_by(order.nullslast(), Notso.created_at.desc()).limit(limit).offset(offset)
     )
     items_result = await db.execute(items_stmt)
     items = items_result.scalars().all()
