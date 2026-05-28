@@ -42,12 +42,16 @@ async function attemptRefresh(): Promise<string> {
     return Promise.reject(new Error("No refresh token available"));
   }
   refreshPromise = axios
-    .post<{ access_token: string }>("/api/v1/auth/refresh", {
+    .post<{ access_token: string; refresh_token: string }>("/api/v1/auth/refresh", {
       refresh_token: refreshToken,
     })
     .then((response) => {
       const newAccess = response.data.access_token;
+      const newRefresh = response.data.refresh_token;
       localStorage.setItem(ACCESS_TOKEN_KEY, newAccess);
+      if (newRefresh) {
+        localStorage.setItem(REFRESH_TOKEN_KEY, newRefresh);
+      }
       return newAccess;
     })
     .finally(() => {

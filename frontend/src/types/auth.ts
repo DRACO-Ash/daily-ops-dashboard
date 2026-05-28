@@ -19,8 +19,3 @@ export interface TokenResponse {
   refresh_token: string;
   token_type: string;
 }
-
-export interface RefreshResponse {
-  access_token: string;
-  token_type: string;
-}

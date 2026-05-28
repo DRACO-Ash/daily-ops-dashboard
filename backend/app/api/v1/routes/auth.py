@@ -1,3 +1,4 @@
+from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import UUID
 
@@ -16,12 +17,13 @@ from app.dependencies import get_current_user
 from app.models.user import User
 from app.schemas.auth import (
     LoginRequest,
+    LogoutRequest,
     RefreshRequest,
-    RefreshResponse,
     TokenResponse,
     UserRead,
 )
 from app.services.audit import write_audit
+from app.services.token_revocation import is_revoked, revoke
 
 router = APIRouter(prefix="/auth", tags=["auth"])
 
@@ -83,6 +85,33 @@ async def _audit_refresh(
     await db.commit()
 
 
+async def _audit_logout(
+    db: AsyncSession,
+    *,
+    user_id: Optional[UUID],
+    ip: Optional[str],
+    success: bool,
+    reason: Optional[str] = None,
+) -> None:
+    detail: dict[str, Any] = {"success": success}
+    if reason is not None:
+        detail["reason"] = reason
+    await write_audit(
+        db,
+        action_type="auth.user.logout",
+        entity_type="user",
+        entity_id=str(user_id) if user_id is not None else None,
+        user_id=user_id,
+        ip_address=ip,
+        detail=detail,
+    )
+    await db.commit()
+
+
+def _exp_to_datetime(exp_claim: Any) -> datetime:
+    return datetime.fromtimestamp(int(exp_claim), tz=timezone.utc)
+
+
 @router.post("/login", response_model=TokenResponse)
 async def login(
     payload: LoginRequest,
@@ -122,12 +151,12 @@ async def login(
     )
 
 
-@router.post("/refresh", response_model=RefreshResponse)
+@router.post("/refresh", response_model=TokenResponse)
 async def refresh(
     payload: RefreshRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-) -> RefreshResponse:
+) -> TokenResponse:
     ip = request.client.host if request.client else None
     decoded = decode_token(payload.refresh_token)
 
@@ -136,8 +165,15 @@ async def refresh(
         raise _invalid_refresh
 
     subject = decoded.get("sub")
+    jti = decoded.get("jti")
+    exp = decoded.get("exp")
+
     if not subject:
         await _audit_refresh(db, user=None, ip=ip, success=False, reason="missing_subject")
+        raise _invalid_refresh
+
+    if not jti:
+        await _audit_refresh(db, user=None, ip=ip, success=False, reason="missing_jti")
         raise _invalid_refresh
 
     try:
@@ -146,33 +182,61 @@ async def refresh(
         await _audit_refresh(db, user=None, ip=ip, success=False, reason="malformed_subject")
         raise _invalid_refresh from exc
 
+    if await is_revoked(db, jti):
+        await _audit_refresh(db, user=None, ip=ip, success=False, reason="revoked_token")
+        raise _invalid_refresh
+
     result = await db.execute(select(User).where(User.id == user_id))
     user = result.scalar_one_or_none()
     if user is None or not user.is_active:
         await _audit_refresh(db, user=user, ip=ip, success=False, reason="inactive_user")
         raise _invalid_refresh
 
+    expires_at = _exp_to_datetime(exp)
+    await revoke(db, jti=jti, user_id=user_id, expires_at=expires_at)
+
     await _audit_refresh(db, user=user, ip=ip, success=True)
-    return RefreshResponse(access_token=create_access_token(subject))
+
+    return TokenResponse(
+        access_token=create_access_token(subject),
+        refresh_token=create_refresh_token(subject),
+    )
 
 
 @router.post("/logout", status_code=status.HTTP_204_NO_CONTENT)
 async def logout(
+    payload: LogoutRequest,
     request: Request,
     db: AsyncSession = Depends(get_db),
-    current_user: User = Depends(get_current_user),
 ) -> None:
     ip = request.client.host if request.client else None
-    await write_audit(
-        db,
-        action_type="auth.user.logout",
-        entity_type="user",
-        entity_id=str(current_user.id),
-        user_id=current_user.id,
-        ip_address=ip,
-        detail={},
-    )
-    await db.commit()
+    decoded = decode_token(payload.refresh_token)
+
+    if decoded is None or decoded.get("type") != "refresh":
+        await _audit_logout(db, user_id=None, ip=ip, success=False, reason="invalid_token")
+        raise _invalid_refresh
+
+    subject = decoded.get("sub")
+    jti = decoded.get("jti")
+    exp = decoded.get("exp")
+
+    if not subject or not jti:
+        await _audit_logout(db, user_id=None, ip=ip, success=False, reason="missing_claim")
+        raise _invalid_refresh
+
+    try:
+        user_id = UUID(subject)
+    except (ValueError, TypeError) as exc:
+        await _audit_logout(db, user_id=None, ip=ip, success=False, reason="malformed_subject")
+        raise _invalid_refresh from exc
+
+    if await is_revoked(db, jti):
+        await _audit_logout(db, user_id=user_id, ip=ip, success=False, reason="already_revoked")
+        raise _invalid_refresh
+
+    expires_at = _exp_to_datetime(exp)
+    await revoke(db, jti=jti, user_id=user_id, expires_at=expires_at)
+    await _audit_logout(db, user_id=user_id, ip=ip, success=True)
 
 
 @router.get("/me", response_model=UserRead)

@@ -94,9 +94,20 @@
 ## JWT Authentication with Stateless Refresh
 
 **Date:** 2026-05-28
+**Status:** Superseded by ADR-011.
 **Decision:** Authentication is HS256 JWT bearer tokens issued by `/api/v1/auth/login` and refreshed at `/api/v1/auth/refresh`. Access tokens last 30 minutes; refresh tokens last 7 days. Refresh is stateless: any validly signed refresh token within its expiry window is accepted. Logout is client-side only (delete both tokens from `localStorage`). `get_current_user` enforces a valid access token on protected routes. Supersedes ADR-009.
 **Rationale:** Stateless refresh keeps the Phase 1 schema simple (no refresh-token table, no blocklist). The 30-minute access window bounds the blast radius of a stolen token. Bcrypt via `passlib` hashes passwords with per-user salt. Tokens travel in `Authorization: Bearer ...` headers rather than cookies, which removes the standard CSRF vector. The frontend axios client transparently refreshes once on 401 before redirecting to the login page.
 **Risks accepted:** A stolen refresh token is valid until expiry (up to 7 days). Mitigations: HTTPS-only transport, refresh tokens never sent to non-auth endpoints, single-retry interceptor that breaks token-loss loops. Real revocation (refresh-token blocklist or a JTI table) is on the Phase 1 backlog for the slice that introduces incident response.
 **Operational note:** There is no public sign-up. First user is bootstrapped with `python -m scripts.create_admin --username <name> --password <secret>` from the `backend/` directory. Subsequent users are created by administrators (UI for this is on the backlog).
+
+**ADR-011**
+
+## Refresh-Token Rotation with JTI Block-List
+
+**Date:** 2026-05-28
+**Decision:** Refresh tokens carry a `jti` (JWT ID) claim and are tracked in a `revoked_jti` block-list table. `/auth/refresh` rotates: every successful exchange issues a new access AND a new refresh token, and the old refresh token's JTI is added to the block-list. `/auth/logout` now takes the refresh token in its body, validates it, and revokes its JTI; no access-token header is required. Supersedes the stateless-refresh half of ADR-010 (the rest of ADR-010 still applies).
+**Rationale:** Rotation gives every refresh token a single-use lifetime, dramatically reducing the value of a stolen refresh token. The block-list lets us forcibly invalidate a specific token without rotating `APP_SECRET_KEY` (which would invalidate every active session). Block-list is preferred over allow-list for Phase 1: smaller table, fewer writes per issue, and the natural-expiry timestamp means we can prune later. The refresh-rotation pattern is also a theft-detection primitive: if the old refresh token shows up again after rotation, that is evidence of replay.
+**Risks accepted:** Access tokens still have a 30-minute lifetime gap on logout: we do not revoke the in-flight access token, only the refresh token. If immediate access-token revocation is needed, the operator hammer is still `APP_SECRET_KEY` rotation. A per-request access-token block-list lookup would close that gap at the cost of one DB read per authenticated request, and is on the backlog.
+**Operational note:** The `revoked_jti` table grows by one row per logout and one row per refresh-rotation. A pruning job that removes rows past their `expires_at` is on the backlog. Until it lands, table growth is bounded by token TTL: rows older than 7 days are no longer load-bearing.
 
 Bluestaq Limited | Daily Operations Dashboard documentation | 2026 | **COMMERCIAL IN CONFIDENCE**

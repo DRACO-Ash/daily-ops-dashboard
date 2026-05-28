@@ -23,12 +23,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }
 
   async function logout() {
-    try {
-      await logoutApi();
-    } catch {
-      // Best-effort: if the server-side audit write fails or the
-      // network is down, we still clear local state so the user is
-      // signed out from this browser.
+    const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
+    if (refreshToken) {
+      try {
+        await logoutApi(refreshToken);
+      } catch {
+        // Best-effort: if the server-side revocation or audit write
+        // fails, we still clear local state so the user is signed
+        // out from this browser. The refresh token will expire on
+        // its own schedule.
+      }
     }
     localStorage.removeItem(ACCESS_TOKEN_KEY);
     localStorage.removeItem(REFRESH_TOKEN_KEY);

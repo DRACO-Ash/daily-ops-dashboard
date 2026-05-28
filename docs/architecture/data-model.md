@@ -90,6 +90,22 @@ Authenticated users of the dashboard. Created by the bootstrap script or future 
 ● `uq_app_user_email` — unique index on `email` when present.
 ● `ix_app_user_username` — query index.
 
+### `revoked_jti`
+
+Block-list of revoked JWT IDs. Populated on every logout and on every refresh-token rotation. Used by `/auth/refresh` and `/auth/logout` to reject re-use of a revoked token.
+
+| Column | Type | Nullable | Notes |
+|--------|------|----------|-------|
+| `jti` | varchar(64) | no | The token's `jti` claim. Primary key. |
+| `user_id` | UUID | yes | The token's subject. Indexed. Nullable for revocations where the subject could not be decoded. |
+| `revoked_at` | timestamptz | no | When the revocation was recorded. |
+| `expires_at` | timestamptz | no | When the underlying token would have expired naturally. Rows past this point are safe to prune. Indexed. |
+
+**Indexes**
+
+● `ix_revoked_jti_user_id` — supports per-user revocation queries.
+● `ix_revoked_jti_expires_at` — supports the pruning job (backlogged).
+
 **SECTION 03**
 
 ## Tables in `audit`
@@ -147,7 +163,6 @@ Planned for follow-on slices:
 ● `tacrep` — Tactical Reports.
 ● `mattermost_message` — bot-collected operational chat.
 ● `procedure_doc` — uploaded analyst procedure documents.
-● `refresh_token` — only if and when we move from stateless to revocable refresh.
 
 Each new feature should follow the `elset` pattern: typed columns for queryable fields, a `raw` JSONB column for the source payload (where the source has one), and an audit entry on every state change.
 

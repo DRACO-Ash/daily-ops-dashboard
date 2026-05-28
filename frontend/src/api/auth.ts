@@ -1,18 +1,13 @@
 import { apiClient } from "./client";
-import type {
-  LoginRequest,
-  RefreshResponse,
-  TokenResponse,
-  User,
-} from "../types";
+import type { LoginRequest, TokenResponse, User } from "../types";
 
 export async function login(payload: LoginRequest): Promise<TokenResponse> {
   const { data } = await apiClient.post<TokenResponse>("/auth/login", payload);
   return data;
 }
 
-export async function refresh(refreshToken: string): Promise<RefreshResponse> {
-  const { data } = await apiClient.post<RefreshResponse>("/auth/refresh", {
+export async function refresh(refreshToken: string): Promise<TokenResponse> {
+  const { data } = await apiClient.post<TokenResponse>("/auth/refresh", {
     refresh_token: refreshToken,
   });
   return data;
@@ -23,6 +18,6 @@ export async function getCurrentUser(): Promise<User> {
   return data;
 }
 
-export async function logout(): Promise<void> {
-  await apiClient.post("/auth/logout");
+export async function logout(refreshToken: string): Promise<void> {
+  await apiClient.post("/auth/logout", { refresh_token: refreshToken });
 }

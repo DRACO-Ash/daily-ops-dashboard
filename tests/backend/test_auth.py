@@ -70,6 +70,21 @@ def audit_calls(monkeypatch) -> list[dict[str, Any]]:
     return calls
 
 
+@pytest.fixture(autouse=True)
+def revoked_jtis(monkeypatch) -> set[str]:
+    revoked: set[str] = set()
+
+    async def fake_is_revoked(db, jti):
+        return jti in revoked
+
+    async def fake_revoke(db, *, jti, user_id, expires_at):
+        revoked.add(jti)
+
+    monkeypatch.setattr("app.api.v1.routes.auth.is_revoked", fake_is_revoked)
+    monkeypatch.setattr("app.api.v1.routes.auth.revoke", fake_revoke)
+    return revoked
+
+
 def test_hash_and_verify_password() -> None:
     hashed = hash_password("hunter2")
     assert verify_password("hunter2", hashed)
@@ -213,7 +228,7 @@ async def test_elsets_ingest_requires_auth() -> None:
     assert response.status_code == 401
 
 
-async def test_refresh_returns_new_access_token() -> None:
+async def test_refresh_returns_new_tokens() -> None:
     user = _make_user(username="alice")
     app.dependency_overrides[get_db] = _override_db(user)
     refresh_token = create_refresh_token(str(user.id))
@@ -227,6 +242,8 @@ async def test_refresh_returns_new_access_token() -> None:
     assert response.status_code == 200
     body = response.json()
     assert "access_token" in body
+    assert "refresh_token" in body
+    assert body["refresh_token"] != refresh_token
     assert body["token_type"] == "bearer"
 
 
@@ -357,27 +374,99 @@ async def test_refresh_invalid_token_emits_audit_with_no_user(audit_calls) -> No
     assert call["detail"]["reason"] == "invalid_token"
 
 
-async def test_logout_emits_audit_and_returns_204(audit_calls) -> None:
+async def test_logout_revokes_refresh_and_returns_204(audit_calls, revoked_jtis) -> None:
     user = _make_user(username="alice")
     app.dependency_overrides[get_db] = _override_db(user)
-    token = create_access_token(str(user.id))
+    refresh_token = create_refresh_token(str(user.id))
+    decoded = decode_token(refresh_token)
+    assert decoded is not None
+    jti = decoded["jti"]
 
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
         response = await client.post(
             "/api/v1/auth/logout",
-            headers={"Authorization": f"Bearer {token}"},
+            json={"refresh_token": refresh_token},
         )
 
     assert response.status_code == 204
+    assert jti in revoked_jtis
     assert len(audit_calls) == 1
     call = audit_calls[0]
     assert call["action_type"] == "auth.user.logout"
     assert call["user_id"] == user.id
+    assert call["detail"]["success"] is True
 
 
-async def test_logout_requires_auth(audit_calls) -> None:
+async def test_logout_rejects_missing_refresh_token() -> None:
     async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
-        response = await client.post("/api/v1/auth/logout")
+        response = await client.post("/api/v1/auth/logout", json={})
+
+    assert response.status_code == 422
+
+
+async def test_logout_rejects_garbage_refresh_token(audit_calls) -> None:
+    app.dependency_overrides[get_db] = _override_db(None)
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/auth/logout",
+            json={"refresh_token": "not.a.real.jwt"},
+        )
 
     assert response.status_code == 401
-    assert audit_calls == []
+    assert audit_calls[0]["action_type"] == "auth.user.logout"
+    assert audit_calls[0]["detail"]["reason"] == "invalid_token"
+
+
+async def test_refresh_revokes_old_jti(revoked_jtis) -> None:
+    user = _make_user()
+    app.dependency_overrides[get_db] = _override_db(user)
+    refresh_token = create_refresh_token(str(user.id))
+    decoded = decode_token(refresh_token)
+    assert decoded is not None
+    old_jti = decoded["jti"]
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": refresh_token},
+        )
+
+    assert response.status_code == 200
+    assert old_jti in revoked_jtis
+
+
+async def test_refresh_rejects_revoked_token(revoked_jtis, audit_calls) -> None:
+    user = _make_user()
+    app.dependency_overrides[get_db] = _override_db(user)
+    refresh_token = create_refresh_token(str(user.id))
+    decoded = decode_token(refresh_token)
+    assert decoded is not None
+    revoked_jtis.add(decoded["jti"])
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/auth/refresh",
+            json={"refresh_token": refresh_token},
+        )
+
+    assert response.status_code == 401
+    assert audit_calls[0]["detail"]["reason"] == "revoked_token"
+
+
+async def test_logout_rejects_already_revoked_refresh(revoked_jtis, audit_calls) -> None:
+    user = _make_user()
+    app.dependency_overrides[get_db] = _override_db(user)
+    refresh_token = create_refresh_token(str(user.id))
+    decoded = decode_token(refresh_token)
+    assert decoded is not None
+    revoked_jtis.add(decoded["jti"])
+
+    async with AsyncClient(transport=ASGITransport(app=app), base_url="http://test") as client:
+        response = await client.post(
+            "/api/v1/auth/logout",
+            json={"refresh_token": refresh_token},
+        )
+
+    assert response.status_code == 401
+    assert audit_calls[0]["detail"]["reason"] == "already_revoked"

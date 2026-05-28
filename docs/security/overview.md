@@ -33,11 +33,13 @@ When new data sources are added, ADR-006 must be re-evaluated. Any source carryi
 
 ### Current state
 
-● HS256 JWT bearer tokens issued by `/api/v1/auth/login` and refreshed at `/api/v1/auth/refresh` (ADR-010).
-● Access tokens last 30 minutes; refresh tokens last 7 days.
+● HS256 JWT bearer tokens issued by `/api/v1/auth/login` and refreshed at `/api/v1/auth/refresh` (ADR-010 and ADR-011).
+● Access tokens last 30 minutes; refresh tokens last 7 days. Every token carries a `jti` (JWT ID) claim.
 ● Passwords hashed with bcrypt via `passlib`.
-● Frontend stores both tokens in `localStorage`. Axios injects the access token, refreshes once on 401, and forces logout on refresh failure.
-● `get_current_user` validates the token, confirms type is `access`, loads the user, rejects if inactive.
+● **Refresh-token rotation (ADR-011).** Every successful refresh issues a new access AND a new refresh token; the old refresh token's JTI is added to the `revoked_jti` block-list. A reused old refresh token is rejected with audit reason `revoked_token`.
+● **Server-side logout.** `POST /auth/logout` takes the refresh token in its body, revokes its JTI, and audits the action. No access-token header is required.
+● Frontend stores both tokens in `localStorage`. Axios injects the access token, refreshes once on 401 (storing the new refresh token returned by the server), and forces logout on refresh failure.
+● `get_current_user` validates the access token, confirms type is `access`, loads the user, rejects if inactive. Access-token revocation is not yet checked on every request (see below).
 
 ### Bootstrap
 
@@ -113,7 +115,7 @@ CI workflow ([.github/workflows/ci.yml](../../.github/workflows/ci.yml)):
 | Vector | Mitigation |
 |--------|-----------|
 | External attacker reaches the application | nginx is the only public endpoint. Backend and DB are on an internal-only Docker network. TLS is enforced. |
-| Compromised analyst credentials | Audit log records every action. Hash chain detects retrospective tampering. 30-minute access token expiry limits blast radius. Stolen refresh token valid up to 7 days (revocation backlogged). |
+| Compromised analyst credentials | Audit log records every action. Hash chain detects retrospective tampering. 30-minute access token expiry limits blast radius. Stolen refresh token can be revoked individually via the `revoked_jti` block-list (ADR-011); rotation on every refresh means each refresh token has a single-use lifetime. |
 | Compromised UDL credentials | Stored in environment variables, not in source. Phase 2 moves these to a secret manager. Compromise of read-only UDL credentials does not enable writes against our system. |
 | SQL injection | SQLAlchemy parameterises every query. No raw string concatenation into SQL. |
 | Cross-site scripting (XSS) | React escapes by default. We do not use `dangerouslySetInnerHTML`. |
@@ -130,7 +132,7 @@ Phase 1 has no formal incident response runbook. Operational response is owned b
 
 > **KEY DECISION**
 >
-> The first hard requirement that turns into a formal incident response runbook is forced sign-out for a compromised refresh token. Today, the mitigation is to rotate `APP_SECRET_KEY`, which invalidates every issued JWT. Plan to land the refresh-token blocklist alongside the IR runbook.
+> A compromised refresh token can now be revoked individually via the `revoked_jti` block-list (ADR-011) instead of rotating `APP_SECRET_KEY`. The rotation hammer is still available for cases where every active session must be torn down at once. A formal incident response runbook lands once the per-user "revoke all my tokens" admin action exists.
 
 **SECTION 11**
 
