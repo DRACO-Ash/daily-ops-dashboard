@@ -3,6 +3,13 @@ import { Link, useParams } from "react-router-dom";
 import { getNotification } from "../api/notifications";
 import type { NotificationDetail as NotificationDetailType } from "../types";
 
+interface NotsoImage {
+  id?: string;
+  filename?: string;
+  caption?: string;
+  url?: string;
+}
+
 function formatField(value: unknown): string {
   if (value === null || value === undefined) return "n/a";
   if (typeof value === "number") return String(value);
@@ -13,6 +20,25 @@ function formatField(value: unknown): string {
 function formatDateTime(value: string | null | undefined): string {
   if (!value) return "n/a";
   return new Date(value).toISOString().replace("T", " ").slice(0, 19);
+}
+
+function parseImageMetadata(raw: Record<string, unknown> | null | undefined): NotsoImage[] {
+  if (!raw) return [];
+  const msgBody = (raw as Record<string, unknown>)["msgBody"];
+  if (!msgBody || typeof msgBody !== "object") return [];
+  const value = (msgBody as Record<string, unknown>)["NOTSO_Image_Metadata"];
+  if (typeof value !== "string") return Array.isArray(value) ? (value as NotsoImage[]) : [];
+  try {
+    const parsed = JSON.parse(value);
+    return Array.isArray(parsed) ? (parsed as NotsoImage[]) : [];
+  } catch {
+    return [];
+  }
+}
+
+function statusClass(status: string | null): string {
+  if (!status) return "status-pill";
+  return `status-pill status-${status.toLowerCase()}`;
 }
 
 export default function NotificationDetailPage() {
@@ -57,38 +83,72 @@ export default function NotificationDetailPage() {
   if (error) return <div className="form-error">{error}</div>;
   if (!item) return null;
 
+  const images = parseImageMetadata(item.raw);
+  const satIds = item.sat_ids && item.sat_ids.length > 0 ? item.sat_ids.join(", ") : null;
+
   return (
     <div>
       <Link to="/notifications" className="back-link">
         &larr; Back to notifications
       </Link>
-      <h1>{item.notice_id ?? "Notification"}</h1>
+      <h1>{item.notso_identifier ?? item.notice_id ?? "Notification"}</h1>
+      {item.event_class && <p className="detail-subtitle">{item.event_class}</p>}
 
       <section className="card">
-        <h2>Identification</h2>
+        <h2>Status</h2>
         <dl className="detail-grid">
-          <dt>Internal ID</dt>
-          <dd>{item.id}</dd>
-          <dt>UDL ID</dt>
-          <dd>{formatField(item.udl_id)}</dd>
-          <dt>Notice ID</dt>
-          <dd>{formatField(item.notice_id)}</dd>
+          <dt>Status</dt>
+          <dd>
+            {item.status ? <span className={statusClass(item.status)}>{item.status}</span> : "n/a"}
+          </dd>
+          <dt>Event type</dt>
+          <dd>{formatField(item.event_type)}</dd>
           <dt>Message type</dt>
           <dd>{formatField(item.msg_type)}</dd>
-          <dt>Source</dt>
-          <dd>{formatField(item.source)}</dd>
-          <dt>Data mode</dt>
-          <dd>{formatField(item.data_mode)}</dd>
           <dt>Classification</dt>
           <dd>{formatField(item.classification_marking)}</dd>
+          <dt>Data mode</dt>
+          <dd>{formatField(item.data_mode)}</dd>
         </dl>
       </section>
 
       <section className="card">
-        <h2>Time window</h2>
+        <h2>Identification</h2>
+        <dl className="detail-grid">
+          <dt>Notice</dt>
+          <dd>{formatField(item.notso_identifier ?? item.notice_id)}</dd>
+          <dt>Event ID</dt>
+          <dd>{formatField(item.event_id)}</dd>
+          <dt>UDL ID</dt>
+          <dd>{formatField(item.udl_id)}</dd>
+          <dt>Source</dt>
+          <dd>{formatField(item.source)}</dd>
+          <dt>Origin network</dt>
+          <dd>{formatField(item.orig_network)}</dd>
+          <dt>Created by</dt>
+          <dd>{formatField(item.created_by)}</dd>
+          <dt>Author</dt>
+          <dd>{formatField(item.company_name)}</dd>
+          {item.notso_link && (
+            <>
+              <dt>Source link</dt>
+              <dd>
+                <a href={item.notso_link} target="_blank" rel="noreferrer">
+                  {item.notso_link}
+                </a>
+              </dd>
+            </>
+          )}
+        </dl>
+      </section>
+
+      <section className="card">
+        <h2>Timing</h2>
         <dl className="detail-grid">
           <dt>UDL created</dt>
           <dd>{formatDateTime(item.udl_created_at)}</dd>
+          <dt>Published</dt>
+          <dd>{formatDateTime(item.publish_date)}</dd>
           <dt>Effective from</dt>
           <dd>{formatDateTime(item.effective_from)}</dd>
           <dt>Effective until</dt>
@@ -97,22 +157,41 @@ export default function NotificationDetailPage() {
       </section>
 
       <section className="card">
-        <h2>Content</h2>
+        <h2>Associated objects</h2>
         <dl className="detail-grid">
-          <dt>Subject</dt>
-          <dd>{formatField(item.subject)}</dd>
+          <dt>Satellite numbers</dt>
+          <dd>{satIds ?? (item.sat_no !== null ? String(item.sat_no) : "n/a")}</dd>
           <dt>Region</dt>
           <dd>{formatField(item.region)}</dd>
-          <dt>Satellite number</dt>
-          <dd>{formatField(item.sat_no)}</dd>
         </dl>
-        {item.description && (
-          <div>
-            <h3>Description</h3>
-            <pre className="notso-description">{item.description}</pre>
-          </div>
-        )}
       </section>
+
+      {item.description && (
+        <section className="card">
+          <h2>Event description</h2>
+          <pre className="notso-description">{item.description}</pre>
+        </section>
+      )}
+
+      {images.length > 0 && (
+        <section className="card">
+          <h2>Source artefacts ({images.length})</h2>
+          <ul className="image-list">
+            {images.map((img, idx) => (
+              <li key={img.id ?? idx}>
+                {img.url ? (
+                  <a href={img.url} target="_blank" rel="noreferrer">
+                    {img.filename ?? img.url}
+                  </a>
+                ) : (
+                  <span>{img.filename ?? "(unnamed artefact)"}</span>
+                )}
+                {img.caption && <span className="image-caption"> &middot; {img.caption}</span>}
+              </li>
+            ))}
+          </ul>
+        </section>
+      )}
 
       <section className="card">
         <h2>Raw UDL payload</h2>

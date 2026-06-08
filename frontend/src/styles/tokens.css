@@ -405,3 +405,54 @@ button:disabled {
   color: var(--color-muted);
   font-size: 0.9rem;
 }
+
+.status-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  background: var(--color-bg);
+  color: var(--color-muted);
+}
+
+.status-pill.status-open {
+  background: rgba(56, 95, 175, 0.12);
+  color: var(--color-blue-1);
+}
+
+.status-pill.status-closed {
+  background: rgba(107, 119, 133, 0.15);
+  color: var(--color-muted);
+}
+
+.event-class-cell {
+  max-width: 360px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.detail-subtitle {
+  color: var(--color-muted);
+  font-size: 1rem;
+  margin-top: calc(-1 * var(--space-2));
+  margin-bottom: var(--space-4);
+}
+
+.image-list {
+  margin: 0;
+  padding-left: var(--space-4);
+  font-size: 0.9rem;
+}
+
+.image-list li {
+  margin-bottom: var(--space-1);
+  word-break: break-all;
+}
+
+.image-caption {
+  color: var(--color-muted);
+}

@@ -21,50 +21,64 @@ class NotificationIngestResult:
     skipped: int
 
 
-UDL_TO_MODEL_FIELDS: dict[str, str] = {
-    "noticeId": "notice_id",
-    "noticeNumber": "notice_id",
-    "msgType": "msg_type",
-    "effectiveFrom": "effective_from",
-    "effectiveUntil": "effective_until",
-    "expirationTime": "effective_until",
-    "subject": "subject",
-    "description": "description",
-    "text": "description",
-    "satNo": "sat_no",
-    "region": "region",
-    "classificationMarking": "classification_marking",
-    "dataMode": "data_mode",
-    "source": "source",
-    "createdAt": "udl_created_at",
-}
-
-DATETIME_FIELDS: set[str] = {
-    "effectiveFrom",
-    "effectiveUntil",
-    "expirationTime",
-    "createdAt",
-}
-
 UPDATABLE_COLUMNS: list[str] = [
-    "notice_id",
     "msg_type",
-    "effective_from",
-    "effective_until",
-    "subject",
-    "description",
-    "sat_no",
-    "region",
-    "classification_marking",
     "data_mode",
     "source",
+    "classification_marking",
+    "created_by",
+    "orig_network",
     "udl_created_at",
+    "notso_identifier",
+    "notice_id",
+    "event_id",
+    "event_class",
+    "event_type",
+    "status",
+    "subject",
+    "description",
+    "region",
+    "notso_link",
+    "company_name",
+    "publish_date",
+    "effective_from",
+    "effective_until",
+    "sat_no",
+    "sat_ids",
     "raw",
 ]
 
 
 def _parse_datetime(value: str) -> datetime:
-    return datetime.fromisoformat(value)
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _set_if_present(target: dict[str, Any], key: str, value: Any) -> None:
+    if value is None:
+        return
+    if isinstance(value, str) and value == "":
+        return
+    target[key] = value
+
+
+def _set_datetime_if_present(target: dict[str, Any], key: str, value: Any) -> None:
+    if value is None or value == "":
+        return
+    if isinstance(value, datetime):
+        target[key] = value
+        return
+    if isinstance(value, str):
+        try:
+            target[key] = _parse_datetime(value)
+        except ValueError:
+            pass
+
+
+def _coerce_sat_no(value: Any) -> Optional[int]:
+    try:
+        return int(value)
+    except (ValueError, TypeError):
+        return None
 
 
 def _map_udl_record(record: dict[str, Any]) -> Optional[dict[str, Any]]:
@@ -76,13 +90,63 @@ def _map_udl_record(record: dict[str, Any]) -> Optional[dict[str, Any]]:
         "udl_id": str(udl_id),
         "raw": record,
     }
-    for udl_field, model_field in UDL_TO_MODEL_FIELDS.items():
-        if udl_field not in record:
-            continue
-        value = record[udl_field]
-        if udl_field in DATETIME_FIELDS and isinstance(value, str):
-            value = _parse_datetime(value)
-        mapped[model_field] = value
+
+    # Top-level UDL envelope
+    _set_if_present(mapped, "msg_type", record.get("msgType"))
+    _set_if_present(mapped, "data_mode", record.get("dataMode"))
+    _set_if_present(mapped, "source", record.get("source"))
+    _set_if_present(mapped, "classification_marking", record.get("classificationMarking"))
+    _set_if_present(mapped, "created_by", record.get("createdBy"))
+    _set_if_present(mapped, "orig_network", record.get("origNetwork"))
+    _set_datetime_if_present(mapped, "udl_created_at", record.get("createdAt"))
+
+    # Nested msgBody fields (TACREP_NOTSO shape, also tolerant to others)
+    msg_body = record.get("msgBody")
+    if isinstance(msg_body, dict):
+        _set_if_present(mapped, "notso_identifier", msg_body.get("NOTSO"))
+        _set_if_present(mapped, "notice_id", msg_body.get("NOTSO"))
+        _set_if_present(mapped, "event_class", msg_body.get("Event_Class"))
+        _set_if_present(mapped, "subject", msg_body.get("Event_Class"))
+        _set_if_present(mapped, "event_type", msg_body.get("Event_Type"))
+        _set_if_present(mapped, "event_id", msg_body.get("Event_Id"))
+        _set_if_present(mapped, "status", msg_body.get("Status"))
+        _set_if_present(mapped, "description", msg_body.get("Event_Description"))
+        _set_if_present(mapped, "company_name", msg_body.get("Company_Name"))
+        _set_if_present(mapped, "notso_link", msg_body.get("NOTSO_Link"))
+        _set_datetime_if_present(mapped, "publish_date", msg_body.get("Publish_Date"))
+
+        sat_ids = msg_body.get("SatIds")
+        if isinstance(sat_ids, list) and sat_ids:
+            mapped["sat_ids"] = sat_ids
+            if len(sat_ids) == 1:
+                coerced = _coerce_sat_no(sat_ids[0])
+                if coerced is not None:
+                    mapped["sat_no"] = coerced
+
+    # Flat-shaped fallbacks for non-TACREP_NOTSO msgTypes that may
+    # surface in the same endpoint.
+    if "notice_id" not in mapped:
+        _set_if_present(mapped, "notice_id", record.get("noticeId"))
+    if "notice_id" not in mapped:
+        _set_if_present(mapped, "notice_id", record.get("noticeNumber"))
+    if "subject" not in mapped:
+        _set_if_present(mapped, "subject", record.get("subject"))
+    if "description" not in mapped:
+        _set_if_present(mapped, "description", record.get("description"))
+    if "description" not in mapped:
+        _set_if_present(mapped, "description", record.get("text"))
+    _set_if_present(mapped, "region", record.get("region"))
+    _set_datetime_if_present(mapped, "effective_from", record.get("effectiveFrom"))
+    if "effective_until" not in mapped:
+        _set_datetime_if_present(mapped, "effective_until", record.get("effectiveUntil"))
+    if "effective_until" not in mapped:
+        _set_datetime_if_present(mapped, "effective_until", record.get("expirationTime"))
+
+    if "sat_no" not in mapped:
+        coerced = _coerce_sat_no(record.get("satNo"))
+        if coerced is not None:
+            mapped["sat_no"] = coerced
+
     return mapped
 
 

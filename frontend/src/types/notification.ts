@@ -1,18 +1,36 @@
 export interface Notification {
   id: string;
   udl_id: string | null;
-  notice_id: string | null;
+
   msg_type: string | null;
-  effective_from: string | null;
-  effective_until: string | null;
-  subject: string | null;
-  description: string | null;
-  sat_no: number | null;
-  region: string | null;
-  classification_marking: string | null;
   data_mode: string | null;
   source: string | null;
+  classification_marking: string | null;
+  created_by: string | null;
+  orig_network: string | null;
   udl_created_at: string | null;
+
+  notso_identifier: string | null;
+  notice_id: string | null;
+  event_id: string | null;
+
+  event_class: string | null;
+  event_type: string | null;
+  status: string | null;
+
+  subject: string | null;
+  description: string | null;
+  region: string | null;
+  notso_link: string | null;
+  company_name: string | null;
+
+  publish_date: string | null;
+  effective_from: string | null;
+  effective_until: string | null;
+
+  sat_no: number | null;
+  sat_ids: string[] | null;
+
   created_at: string;
   updated_at: string;
 }
@@ -44,8 +62,12 @@ export interface NotificationIngestResponse {
 }
 
 export type NotificationSortColumn =
+  | "notso_identifier"
   | "notice_id"
   | "msg_type"
+  | "event_type"
+  | "status"
+  | "publish_date"
   | "effective_from"
   | "effective_until"
   | "sat_no"
@@ -54,6 +76,8 @@ export type NotificationSortColumn =
 
 export interface NotificationListQuery {
   msg_type?: string;
+  event_type?: string;
+  status?: string;
   sat_no?: number;
   effective_from_gte?: string;
   effective_from_lte?: string;

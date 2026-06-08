@@ -17,6 +17,20 @@ function formatDateTime(value: string | null): string {
   return new Date(value).toISOString().replace("T", " ").slice(0, 19);
 }
 
+function formatSatIds(item: Notification): string {
+  if (item.sat_ids && item.sat_ids.length > 0) {
+    if (item.sat_ids.length <= 3) return item.sat_ids.join(", ");
+    return `${item.sat_ids.slice(0, 3).join(", ")} (+${item.sat_ids.length - 3})`;
+  }
+  if (item.sat_no !== null && item.sat_no !== undefined) return String(item.sat_no);
+  return "n/a";
+}
+
+function statusClass(status: string | null): string {
+  if (!status) return "status-pill";
+  return `status-pill status-${status.toLowerCase()}`;
+}
+
 function extractErrorMessage(err: unknown, fallback: string): string {
   if (err && typeof err === "object" && "response" in err) {
     const response = (err as { response?: { data?: { detail?: unknown } } }).response;
@@ -32,8 +46,9 @@ export default function NotificationsPage() {
   const [items, setItems] = useState<Notification[]>([]);
   const [total, setTotal] = useState(0);
   const [offset, setOffset] = useState(0);
-  const [msgTypeFilter, setMsgTypeFilter] = useState<string | undefined>(undefined);
-  const [msgTypeInput, setMsgTypeInput] = useState("");
+  const [eventTypeFilter, setEventTypeFilter] = useState<string | undefined>(undefined);
+  const [eventTypeInput, setEventTypeInput] = useState("");
+  const [statusFilter, setStatusFilter] = useState<string | undefined>(undefined);
   const [sortColumn, setSortColumn] = useState<NotificationSortColumn>("udl_created_at");
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [reloadToken, setReloadToken] = useState(0);
@@ -43,7 +58,7 @@ export default function NotificationsPage() {
   const [ingestCreatedAt, setIngestCreatedAt] = useState("");
   const [ingestMsgType, setIngestMsgType] = useState(DEFAULT_MSG_TYPE);
   const [ingestDataMode, setIngestDataMode] = useState("REAL");
-  const [ingestSource, setIngestSource] = useState("");
+  const [ingestSource, setIngestSource] = useState("JCO");
   const [ingestMaxResults, setIngestMaxResults] = useState("");
   const [ingesting, setIngesting] = useState(false);
   const [ingestResult, setIngestResult] = useState<NotificationIngestResponse | null>(null);
@@ -55,7 +70,8 @@ export default function NotificationsPage() {
       setError(null);
       try {
         const page = await listNotifications({
-          msg_type: msgTypeFilter,
+          event_type: eventTypeFilter,
+          status: statusFilter,
           limit: PAGE_SIZE,
           offset,
           sort_by: sortColumn,
@@ -77,7 +93,7 @@ export default function NotificationsPage() {
     return () => {
       cancelled = true;
     };
-  }, [msgTypeFilter, offset, sortColumn, sortDirection, reloadToken]);
+  }, [eventTypeFilter, statusFilter, offset, sortColumn, sortDirection, reloadToken]);
 
   function onSortChange(column: NotificationSortColumn) {
     if (column === sortColumn) {
@@ -91,8 +107,8 @@ export default function NotificationsPage() {
 
   function onFilterSubmit(event: FormEvent) {
     event.preventDefault();
-    const trimmed = msgTypeInput.trim();
-    setMsgTypeFilter(trimmed === "" ? undefined : trimmed);
+    const trimmed = eventTypeInput.trim();
+    setEventTypeFilter(trimmed === "" ? undefined : trimmed);
     setOffset(0);
   }
 
@@ -140,7 +156,7 @@ export default function NotificationsPage() {
               type="text"
               value={ingestMsgType}
               onChange={(e) => setIngestMsgType(e.target.value)}
-              placeholder="e.g. TACREP_NOTSO"
+              placeholder="TACREP_NOTSO"
             />
           </label>
           <label>
@@ -161,12 +177,12 @@ export default function NotificationsPage() {
             />
           </label>
           <label>
-            Source (optional)
+            Source
             <input
               type="text"
               value={ingestSource}
               onChange={(e) => setIngestSource(e.target.value)}
-              placeholder="e.g. JCO"
+              placeholder="JCO"
             />
           </label>
           <label>
@@ -193,20 +209,36 @@ export default function NotificationsPage() {
       <section className="card">
         <form onSubmit={onFilterSubmit} className="filter-form">
           <label>
-            Filter by message type
+            Event type (filter)
             <input
               type="text"
-              value={msgTypeInput}
-              onChange={(e) => setMsgTypeInput(e.target.value)}
-              placeholder="e.g. TACREP_NOTSO"
+              value={eventTypeInput}
+              onChange={(e) => setEventTypeInput(e.target.value)}
+              placeholder="e.g. other, maneuver, launch"
             />
+          </label>
+          <label>
+            Status
+            <select
+              value={statusFilter ?? ""}
+              onChange={(e) => {
+                const v = e.target.value;
+                setStatusFilter(v === "" ? undefined : v);
+                setOffset(0);
+              }}
+            >
+              <option value="">All</option>
+              <option value="OPEN">OPEN</option>
+              <option value="CLOSED">CLOSED</option>
+            </select>
           </label>
           <button type="submit">Apply</button>
           <button
             type="button"
             onClick={() => {
-              setMsgTypeInput("");
-              setMsgTypeFilter(undefined);
+              setEventTypeInput("");
+              setEventTypeFilter(undefined);
+              setStatusFilter(undefined);
               setOffset(0);
             }}
           >
@@ -221,19 +253,28 @@ export default function NotificationsPage() {
           <thead>
             <tr>
               <SortableHeader
-                column="notice_id"
+                column="notso_identifier"
                 label="Notice"
                 activeColumn={sortColumn}
                 activeDirection={sortDirection}
                 onChange={onSortChange}
               />
               <SortableHeader
-                column="msg_type"
+                column="status"
+                label="Status"
+                activeColumn={sortColumn}
+                activeDirection={sortDirection}
+                onChange={onSortChange}
+              />
+              <SortableHeader
+                column="event_type"
                 label="Type"
                 activeColumn={sortColumn}
                 activeDirection={sortDirection}
                 onChange={onSortChange}
               />
+              <th>Event class</th>
+              <th>Sat IDs</th>
               <SortableHeader
                 column="udl_created_at"
                 label="UDL created"
@@ -241,21 +282,6 @@ export default function NotificationsPage() {
                 activeDirection={sortDirection}
                 onChange={onSortChange}
               />
-              <SortableHeader
-                column="effective_from"
-                label="Effective from"
-                activeColumn={sortColumn}
-                activeDirection={sortDirection}
-                onChange={onSortChange}
-              />
-              <SortableHeader
-                column="sat_no"
-                label="Sat No"
-                activeColumn={sortColumn}
-                activeDirection={sortDirection}
-                onChange={onSortChange}
-              />
-              <th>Subject</th>
             </tr>
           </thead>
           <tbody>
@@ -265,12 +291,14 @@ export default function NotificationsPage() {
                 className="clickable-row"
                 onClick={() => navigate(`/notifications/${it.id}`)}
               >
-                <td>{it.notice_id ?? "n/a"}</td>
-                <td>{it.msg_type ?? "n/a"}</td>
+                <td>{it.notso_identifier ?? it.notice_id ?? "n/a"}</td>
+                <td>
+                  {it.status ? <span className={statusClass(it.status)}>{it.status}</span> : "n/a"}
+                </td>
+                <td>{it.event_type ?? "n/a"}</td>
+                <td className="event-class-cell">{it.event_class ?? "n/a"}</td>
+                <td>{formatSatIds(it)}</td>
                 <td>{formatDateTime(it.udl_created_at)}</td>
-                <td>{formatDateTime(it.effective_from)}</td>
-                <td>{it.sat_no ?? "n/a"}</td>
-                <td>{it.subject ?? "n/a"}</td>
               </tr>
             ))}
             {!loading && items.length === 0 && (

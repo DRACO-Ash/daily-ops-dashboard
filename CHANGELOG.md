@@ -12,6 +12,13 @@ All notable changes to the Daily Operations Dashboard are recorded here. The for
 
 ## [Unreleased]
 
+### Added
+
+● **Real TACREP_NOTSO shape support.** UDL nests the interesting fields inside `msgBody`; mapper now extracts `NOTSO` (notice identifier), `Event_Class`, `Event_Type`, `Event_Id`, `Status` (OPEN/CLOSED), `Event_Description`, `Company_Name`, `NOTSO_Link`, `Publish_Date`, and the `SatIds` array. Top-level envelope fields (`createdBy`, `origNetwork`, `classificationMarking`, etc.) are now captured too. Migration `0006_add_notification_msg_body_fields` adds eleven new typed columns plus four query indexes (`notso_identifier`, `status`, `event_type`, `publish_date`).
+● **Notifications page redesign.** List view now shows Notice / Status / Type / Event class / Sat IDs / UDL created. Status filter (OPEN/CLOSED), event-type filter, and status indicator pills. Ingest form defaults `Source` to `JCO` to match the production query.
+● **Notification detail view.** New sections for Status, Identification (including the `NOTSO_Link` URL to the JCO source page), Timing, Associated objects (rendering the full `SatIds` array), Event description (preformatted), and Source artefacts (parses `NOTSO_Image_Metadata` and renders clickable links to the underlying assets).
+● Single-sat convenience: when `SatIds` has exactly one numeric value, `sat_no` is populated so existing filter and sort paths still work; multi-sat notices populate `sat_ids` only.
+
 ### Changed
 
 ● **`notso` → `notification` rename.** UDL serves Tactical Reports (TACREP) and Notices to Space Operators (NOTSO) through a single `/notification` endpoint under `msgType=TACREP_NOTSO`; the earlier naming treated them as separate surfaces, which was wrong. Alembic migration `0005_rename_notso_to_notification` renames the table, its indexes, and the unique constraint. Backend model, schemas, ingest service, routes, UDL client method, and audit action type (`udl.notso.ingest` → `udl.notification.ingest`) all renamed accordingly. Frontend page, types, API wrapper, navigation label, and route URL move from `/notsos` to `/notifications`. UDL endpoint corrected from `/notso` to `/notification`. New ingest parameters (`msg_type`, `created_at_gte`, `data_mode`, `source`, `max_results`) match the example URL used in production. `msg_type` defaults to `TACREP_NOTSO`.

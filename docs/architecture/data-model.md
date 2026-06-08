@@ -71,24 +71,37 @@ Stores UDL element sets ingested via the manual trigger or, in a later slice, by
 
 ### `notification`
 
-Stores UDL notification records ingested via the manual trigger. UDL serves Tactical Reports (TACREP) and Notices to Space Operators (NOTSO) through the same `/notification` endpoint under `msgType=TACREP_NOTSO`; other notification message types land here too. This table replaced the original `notso` table at migration `0005_rename_notso_to_notification` once the combined nature of the UDL endpoint was confirmed.
+Stores UDL notification records ingested via the manual trigger. UDL serves Tactical Reports (TACREP) and Notices to Space Operators (NOTSO) through the same `/notification` endpoint under `msgType=TACREP_NOTSO`; other notification message types land here too. This table replaced the original `notso` table at migration `0005_rename_notso_to_notification` once the combined nature of the UDL endpoint was confirmed; migration `0006_add_notification_msg_body_fields` then expanded it once we saw the real `msgBody` shape.
+
+UDL nests the interesting fields inside a `msgBody` object. The typed columns mirror what we see in TACREP_NOTSO records sourced from JCO; the full payload is still preserved verbatim in `raw` so anything outside the typed set can be queried via JSONB operators.
 
 | Column | Type | Nullable | Notes |
 |--------|------|----------|-------|
 | `id` | UUID | no | Primary key. |
-| `udl_id` | varchar(64) | yes | UDL's own identifier. Unique when present. Natural key for dedupe. |
-| `notice_id` | varchar(100) | yes | Notice identifier from UDL (`noticeId` or `noticeNumber`). Indexed. |
-| `msg_type` | varchar(50) | yes | Message type (`TACREP_NOTSO` for the combined Tactical Report / Notice to Space Operators surface; other notification message types possible). Indexed. |
-| `effective_from` | timestamptz | yes | When the notice begins to apply. Indexed. |
-| `effective_until` | timestamptz | yes | When the notice expires. |
-| `subject` | varchar(500) | yes | Short title. |
-| `description` | text | yes | Full notice body. |
-| `sat_no` | integer | yes | Associated NORAD catalogue number, when the notice is satellite-specific. Indexed. |
-| `region` | varchar(255) | yes | Area or region described by the notice. |
-| `classification_marking` | varchar(50) | yes | UDL classification (typically `U` for Unclassified). |
-| `data_mode` | varchar(20) | yes | UDL data mode (`REAL`, `TEST`, `SIMULATED`, `EXERCISE`). |
-| `source` | varchar(100) | yes | UDL source identifier (for example `JCO`). |
-| `udl_created_at` | timestamptz | yes | When UDL created the notification. Mapped from UDL's `createdAt`. |
+| `udl_id` | varchar(64) | yes | UDL's own `id`. Unique when present. Natural key for dedupe. |
+| `msg_type` | varchar(50) | yes | UDL `msgType` (e.g. `TACREP_NOTSO`). Indexed. |
+| `data_mode` | varchar(20) | yes | UDL `dataMode` (`REAL`, `TEST`, `SIMULATED`, `EXERCISE`). |
+| `source` | varchar(100) | yes | UDL `source` (for example `JCO`). |
+| `classification_marking` | varchar(50) | yes | UDL `classificationMarking` (for example `U//DS-JCO-NOTIF`). |
+| `created_by` | varchar(100) | yes | UDL `createdBy` (system or user that wrote the record into UDL). |
+| `orig_network` | varchar(50) | yes | UDL `origNetwork` (for example `OPS1`). |
+| `udl_created_at` | timestamptz | yes | UDL `createdAt`. The field that the standard ingest filters on. |
+| `notso_identifier` | varchar(100) | yes | `msgBody.NOTSO` (for example `02f7_05Jun-0448Z`). Indexed. |
+| `notice_id` | varchar(100) | yes | Alias for `notso_identifier` (kept for other msgTypes that use `noticeId`). Indexed. |
+| `event_id` | varchar(64) | yes | `msgBody.Event_Id` (JCO-side event UUID; multiple notices can share one event). |
+| `event_class` | varchar(500) | yes | `msgBody.Event_Class` (the analyst-readable title, e.g. `Maneuver / OBJECT C (64627) / LEO`). |
+| `event_type` | varchar(50) | yes | `msgBody.Event_Type` (`other`, `maneuver`, etc.). Indexed. |
+| `status` | varchar(20) | yes | `msgBody.Status` (`OPEN`, `CLOSED`). Indexed. |
+| `subject` | varchar(500) | yes | Alias of `event_class` for non-TACREP_NOTSO records with a flat `subject` field. |
+| `description` | text | yes | `msgBody.Event_Description` (the full free-text body). |
+| `region` | varchar(255) | yes | Region descriptor for notices that carry one. |
+| `notso_link` | text | yes | `msgBody.NOTSO_Link` (URL on the JCO source system). |
+| `company_name` | varchar(100) | yes | `msgBody.Company_Name` (the analyst who authored the notice). |
+| `publish_date` | timestamptz | yes | `msgBody.Publish_Date` (when JCO published the notice). Indexed. |
+| `effective_from` | timestamptz | yes | When the notice begins to apply. Indexed. Nullable; TACREP_NOTSOs do not always carry this. |
+| `effective_until` | timestamptz | yes | When the notice expires. Nullable. |
+| `sat_no` | integer | yes | Single-sat convenience column. Populated only when `sat_ids` has exactly one numeric value. Indexed. |
+| `sat_ids` | jsonb | yes | `msgBody.SatIds`, the full list of associated NORAD catalogue numbers (as strings). |
 | `raw` | jsonb | no | Full UDL payload preserved verbatim. |
 | `created_at` | timestamptz | no | Row creation timestamp (our DB write time). |
 | `updated_at` | timestamptz | no | Row last-update timestamp, refreshed on upsert. |
@@ -96,7 +109,21 @@ Stores UDL notification records ingested via the manual trigger. UDL serves Tact
 **Indexes**
 
 ● `uq_notification_udl_id` — unique on `udl_id` for `INSERT ... ON CONFLICT` upsert.
-● `ix_notification_notice_id`, `ix_notification_msg_type`, `ix_notification_effective_from`, `ix_notification_sat_no` — query indexes.
+● `ix_notification_notice_id`, `ix_notification_msg_type`, `ix_notification_effective_from`, `ix_notification_sat_no` — original query indexes.
+● `ix_notification_notso_identifier`, `ix_notification_status`, `ix_notification_event_type`, `ix_notification_publish_date` — added at migration `0006`.
+
+**Querying `sat_ids`**
+
+The array is JSONB. To find every notice mentioning satellite 44910:
+
+```sql
+SELECT notso_identifier, event_class, status
+  FROM notification
+ WHERE sat_ids @> '["44910"]'::jsonb
+ ORDER BY udl_created_at DESC;
+```
+
+This complements the indexed `sat_no` column, which only covers the single-sat case.
 
 ### `app_user`
 

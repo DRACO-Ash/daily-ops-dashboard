@@ -24,8 +24,12 @@ from app.services.udl_client import UDLAuthError, UDLClient, UDLClientError
 router = APIRouter(prefix="/notifications", tags=["notifications"])
 
 NotificationSortColumn = Literal[
+    "notso_identifier",
     "notice_id",
     "msg_type",
+    "event_type",
+    "status",
+    "publish_date",
     "effective_from",
     "effective_until",
     "sat_no",
@@ -37,6 +41,8 @@ NotificationSortColumn = Literal[
 @router.get("", response_model=NotificationPage)
 async def list_notifications(
     msg_type: Optional[str] = Query(None),
+    event_type: Optional[str] = Query(None),
+    status: Optional[str] = Query(None),
     sat_no: Optional[int] = Query(None),
     effective_from_gte: Optional[datetime] = Query(None),
     effective_from_lte: Optional[datetime] = Query(None),
@@ -52,6 +58,10 @@ async def list_notifications(
     conditions = []
     if msg_type is not None:
         conditions.append(Notification.msg_type == msg_type)
+    if event_type is not None:
+        conditions.append(Notification.event_type == event_type)
+    if status is not None:
+        conditions.append(Notification.status == status)
     if sat_no is not None:
         conditions.append(Notification.sat_no == sat_no)
     if effective_from_gte is not None:

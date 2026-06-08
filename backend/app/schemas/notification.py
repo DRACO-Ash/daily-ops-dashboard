@@ -10,18 +10,35 @@ class NotificationRead(BaseModel):
 
     id: UUID
     udl_id: Optional[str] = None
-    notice_id: Optional[str] = None
     msg_type: Optional[str] = None
-    effective_from: Optional[datetime] = None
-    effective_until: Optional[datetime] = None
-    subject: Optional[str] = None
-    description: Optional[str] = None
-    sat_no: Optional[int] = None
-    region: Optional[str] = None
-    classification_marking: Optional[str] = None
     data_mode: Optional[str] = None
     source: Optional[str] = None
+    classification_marking: Optional[str] = None
+    created_by: Optional[str] = None
+    orig_network: Optional[str] = None
     udl_created_at: Optional[datetime] = None
+
+    notso_identifier: Optional[str] = None
+    notice_id: Optional[str] = None
+    event_id: Optional[str] = None
+
+    event_class: Optional[str] = None
+    event_type: Optional[str] = None
+    status: Optional[str] = None
+
+    subject: Optional[str] = None
+    description: Optional[str] = None
+    region: Optional[str] = None
+    notso_link: Optional[str] = None
+    company_name: Optional[str] = None
+
+    publish_date: Optional[datetime] = None
+    effective_from: Optional[datetime] = None
+    effective_until: Optional[datetime] = None
+
+    sat_no: Optional[int] = None
+    sat_ids: Optional[list[str]] = None
+
     created_at: datetime
     updated_at: datetime
 
