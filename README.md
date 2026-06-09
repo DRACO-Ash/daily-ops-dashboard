@@ -23,28 +23,33 @@ Analysts on watch spend time stitching together views across UDL, Mattermost, Cl
 
 ## Quick start
 
+One file does everything:
+
 ```powershell
-# 1. Set up environment
-Copy-Item .env.example .env
-# Then edit .env to set UDL_USERNAME, UDL_PASSWORD, and a real APP_SECRET_KEY.
-
-# 2. Bring the stack up
-cd infra
-docker compose up -d
-
-# 3. Apply database migrations
-cd ..
-alembic upgrade head
-
-# 4. Bootstrap the first admin user
-cd backend
-python -m scripts.create_admin --username your.username --password 'pick-a-real-one'
-
-# 5. Open the dashboard
-# Browse to https://localhost (accept the self-signed certificate).
+.\scripts\dev.ps1
 ```
 
-Full developer setup is in [docs/developer/setup.md](docs/developer/setup.md).
+That script (idempotent, safe to re-run on every check-out):
+
+● Creates `.env` from `.env.example` with a fresh `APP_SECRET_KEY` if missing.
+● Generates a self-signed TLS certificate via docker if one is not already in `infra/certs/`.
+● Brings up the full stack (`db`, `backend`, `frontend`, `nginx`).
+● Waits for the database to be ready.
+● Applies any pending alembic migrations.
+● Bootstraps the first admin user if `app_user` is empty (prompts, or reads `$env:ADMIN_USERNAME` / `$env:ADMIN_PASSWORD`).
+● Tails the backend logs (use `-NoLogs` to skip).
+
+Other useful invocations:
+
+```powershell
+.\scripts\dev.ps1 -Down       # Stop the stack, keep the database volume.
+.\scripts\dev.ps1 -Restart    # Stop, start again without rebuilding.
+.\scripts\dev.ps1 -Reset      # Stop and DROP the database volume.
+```
+
+When the script settles, open `https://localhost` and accept the self-signed certificate.
+
+Full developer setup, including running the backend or frontend outside docker for hot reload, is in [docs/developer/setup.md](docs/developer/setup.md).
 
 **SECTION 03**
 

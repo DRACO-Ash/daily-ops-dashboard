@@ -25,6 +25,10 @@ services:
       - internal
     volumes:
       - ../backend:/app
+      # /workspace gives alembic access to alembic.ini and migrations/
+      # at the repo root (the dev.ps1 script runs migrations via
+      # `docker compose exec -w /workspace backend alembic upgrade head`).
+      - ..:/workspace
 
   frontend:
     build:
