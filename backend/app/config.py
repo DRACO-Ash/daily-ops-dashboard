@@ -1,4 +1,5 @@
 from typing import List
+from urllib.parse import quote
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
@@ -41,10 +42,14 @@ class Settings(BaseSettings):
 
     @property
     def database_url(self) -> str:
+        # Percent-encode user and password so reserved characters
+        # (% ! @ : / + and friends) survive the round-trip into a
+        # valid Postgres URL.
+        user = quote(self.postgres_user, safe="")
+        password = quote(self.postgres_password, safe="")
         return (
-            f"postgresql+asyncpg://{self.postgres_user}:"
-            f"{self.postgres_password}@{self.postgres_host}:"
-            f"{self.postgres_port}/{self.postgres_db}"
+            f"postgresql+asyncpg://{user}:{password}"
+            f"@{self.postgres_host}:{self.postgres_port}/{self.postgres_db}"
         )
 
 
