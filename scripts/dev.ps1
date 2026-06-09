@@ -168,9 +168,20 @@ function Ensure-Certs {
 }
 
 # Compose ---------------------------------------------------------
+function Get-ComposeBase {
+    # `--env-file` is required because Compose otherwise looks for `.env`
+    # in the directory of the compose file (infra/), where it does not
+    # exist. The repo-root .env holds POSTGRES_PASSWORD and friends.
+    $base = @("compose", "-f", $ComposeFile)
+    if (Test-Path $EnvFile) {
+        $base += @("--env-file", $EnvFile)
+    }
+    return $base
+}
+
 function Invoke-Compose {
     param([string[]]$ComposeArgs)
-    Invoke-Required -Command "docker" -Arguments (@("compose", "-f", $ComposeFile) + $ComposeArgs)
+    Invoke-Required -Command "docker" -Arguments ((Get-ComposeBase) + $ComposeArgs)
 }
 
 function Down-Stack {
@@ -194,9 +205,11 @@ function Start-Stack {
 # Database --------------------------------------------------------
 function Wait-DbReady {
     Write-Step "Waiting for the database"
+    $base = Get-ComposeBase
+    $probeArgs = $base + @("exec", "-T", "db", "pg_isready", "-U", "ops_user", "-d", "ops_dashboard")
     $maxTries = 60
     for ($i = 0; $i -lt $maxTries; $i++) {
-        & docker compose -f $ComposeFile exec -T db pg_isready -U ops_user -d ops_dashboard *> $null
+        & docker @probeArgs *> $null
         if ($LASTEXITCODE -eq 0) {
             Write-Ok "Database is ready"
             return
@@ -214,7 +227,13 @@ function Apply-Migrations {
 
 # Admin bootstrap -------------------------------------------------
 function Test-AdminExists {
-    $count = & docker compose -f $ComposeFile exec -T db psql -U ops_user -d ops_dashboard -tA -c "SELECT COUNT(*) FROM app_user" 2>$null
+    $base = Get-ComposeBase
+    $queryArgs = $base + @(
+        "exec", "-T", "db",
+        "psql", "-U", "ops_user", "-d", "ops_dashboard",
+        "-tA", "-c", "SELECT COUNT(*) FROM app_user"
+    )
+    $count = & docker @queryArgs 2>$null
     if ($LASTEXITCODE -ne 0) { return $false }
     return ([int]$count.Trim()) -gt 0
 }
