@@ -167,6 +167,34 @@ function Ensure-Certs {
     Write-Note "Your browser will warn about the self-signed cert; that is expected for local dev."
 }
 
+# .env reader -----------------------------------------------------
+# Reads the repo-root .env so probes can use whatever POSTGRES_USER /
+# POSTGRES_DB the operator actually set instead of hardcoded defaults.
+function Get-EnvValue {
+    param(
+        [Parameter(Mandatory = $true)][string]$Key,
+        [Parameter(Mandatory = $true)][string]$Default
+    )
+    if (-not (Test-Path $EnvFile)) {
+        return $Default
+    }
+    $line = Get-Content $EnvFile | Where-Object { $_ -match "^\s*$Key\s*=" } | Select-Object -First 1
+    if (-not $line) {
+        return $Default
+    }
+    $value = ($line -split "=", 2)[1].Trim()
+    # Strip optional surrounding quotes.
+    if ($value.StartsWith('"') -and $value.EndsWith('"')) {
+        $value = $value.Substring(1, $value.Length - 2)
+    } elseif ($value.StartsWith("'") -and $value.EndsWith("'")) {
+        $value = $value.Substring(1, $value.Length - 2)
+    }
+    if ([string]::IsNullOrWhiteSpace($value)) {
+        return $Default
+    }
+    return $value
+}
+
 # Compose ---------------------------------------------------------
 function Get-ComposeBase {
     # `--env-file` is required because Compose otherwise looks for `.env`
@@ -206,7 +234,9 @@ function Start-Stack {
 function Wait-DbReady {
     Write-Step "Waiting for the database"
     $base = Get-ComposeBase
-    $probeArgs = $base + @("exec", "-T", "db", "pg_isready", "-U", "ops_user", "-d", "ops_dashboard")
+    $pgUser = Get-EnvValue -Key "POSTGRES_USER" -Default "ops_user"
+    $pgDb = Get-EnvValue -Key "POSTGRES_DB" -Default "ops_dashboard"
+    $probeArgs = $base + @("exec", "-T", "db", "pg_isready", "-U", $pgUser, "-d", $pgDb)
     $maxTries = 60
     # PowerShell 5.1 wraps every native-command stderr line as a
     # NativeCommandError when streams are redirected. Under
@@ -240,9 +270,11 @@ function Apply-Migrations {
 # Admin bootstrap -------------------------------------------------
 function Test-AdminExists {
     $base = Get-ComposeBase
+    $pgUser = Get-EnvValue -Key "POSTGRES_USER" -Default "ops_user"
+    $pgDb = Get-EnvValue -Key "POSTGRES_DB" -Default "ops_dashboard"
     $queryArgs = $base + @(
         "exec", "-T", "db",
-        "psql", "-U", "ops_user", "-d", "ops_dashboard",
+        "psql", "-U", $pgUser, "-d", $pgDb,
         "-tA", "-c", "SELECT COUNT(*) FROM app_user"
     )
     $prev = $ErrorActionPreference
