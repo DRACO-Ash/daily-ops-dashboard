@@ -1,7 +1,7 @@
 """add notification columns derived from msgBody
 
-Revision ID: 0006_add_notification_msg_body_fields
-Revises: 0005_rename_notso_to_notification
+Revision ID: 0006_notif_msgbody
+Revises: 0005_rename_notso
 Create Date: 2026-06-08
 
 """
@@ -12,8 +12,8 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0006_add_notification_msg_body_fields"
-down_revision: Union[str, None] = "0005_rename_notso_to_notification"
+revision: str = "0006_notif_msgbody"
+down_revision: Union[str, None] = "0005_rename_notso"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 

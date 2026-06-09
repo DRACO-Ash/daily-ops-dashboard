@@ -71,7 +71,7 @@ Stores UDL element sets ingested via the manual trigger or, in a later slice, by
 
 ### `notification`
 
-Stores UDL notification records ingested via the manual trigger. UDL serves Tactical Reports (TACREP) and Notices to Space Operators (NOTSO) through the same `/notification` endpoint under `msgType=TACREP_NOTSO`; other notification message types land here too. This table replaced the original `notso` table at migration `0005_rename_notso_to_notification` once the combined nature of the UDL endpoint was confirmed; migration `0006_add_notification_msg_body_fields` then expanded it once we saw the real `msgBody` shape.
+Stores UDL notification records ingested via the manual trigger. UDL serves Tactical Reports (TACREP) and Notices to Space Operators (NOTSO) through the same `/notification` endpoint under `msgType=TACREP_NOTSO`; other notification message types land here too. This table replaced the original `notso` table at migration `0005_rename_notso` once the combined nature of the UDL endpoint was confirmed; migration `0006_notif_msgbody` then expanded it once we saw the real `msgBody` shape.
 
 UDL nests the interesting fields inside a `msgBody` object. The typed columns mirror what we see in TACREP_NOTSO records sourced from JCO; the full payload is still preserved verbatim in `raw` so anything outside the typed set can be queried via JSONB operators.
 

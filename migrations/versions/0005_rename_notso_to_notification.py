@@ -1,6 +1,6 @@
 """rename notso to notification
 
-Revision ID: 0005_rename_notso_to_notification
+Revision ID: 0005_rename_notso
 Revises: 0004_create_notso
 Create Date: 2026-05-28
 
@@ -10,7 +10,7 @@ from typing import Sequence, Union
 
 from alembic import op
 
-revision: str = "0005_rename_notso_to_notification"
+revision: str = "0005_rename_notso"
 down_revision: Union[str, None] = "0004_create_notso"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
