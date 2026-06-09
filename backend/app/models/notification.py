@@ -1,7 +1,10 @@
 import uuid
+from datetime import datetime
+from typing import Any, Optional
 
-from sqlalchemy import Column, DateTime, Index, Integer, String, Text, UniqueConstraint
+from sqlalchemy import DateTime, Index, Integer, String, Text, UniqueConstraint
 from sqlalchemy.dialects.postgresql import JSONB, UUID
+from sqlalchemy.orm import Mapped, mapped_column
 
 from app.db.base import Base, TimestampMixin
 
@@ -23,46 +26,62 @@ class Notification(Base, TimestampMixin):
 
     __tablename__ = "notification"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
-    udl_id = Column(String(64), nullable=True)
+    id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True),
+        primary_key=True,
+        default=uuid.uuid4,
+    )
+    udl_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     # Top-level UDL envelope
-    msg_type = Column(String(50), nullable=True)
-    data_mode = Column(String(20), nullable=True)
-    source = Column(String(100), nullable=True)
-    classification_marking = Column(String(50), nullable=True)
-    created_by = Column(String(100), nullable=True)
-    orig_network = Column(String(50), nullable=True)
-    udl_created_at = Column(DateTime(timezone=True), nullable=True)
+    msg_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    data_mode: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
+    source: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    classification_marking: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    created_by: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    orig_network: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    udl_created_at: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     # msgBody-derived identifiers
-    notso_identifier = Column(String(100), nullable=True)
-    notice_id = Column(String(100), nullable=True)
-    event_id = Column(String(64), nullable=True)
+    notso_identifier: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    notice_id: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
+    event_id: Mapped[Optional[str]] = mapped_column(String(64), nullable=True)
 
     # msgBody-derived classification of the event
-    event_class = Column(String(500), nullable=True)
-    event_type = Column(String(50), nullable=True)
-    status = Column(String(20), nullable=True)
+    event_class: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    event_type: Mapped[Optional[str]] = mapped_column(String(50), nullable=True)
+    status: Mapped[Optional[str]] = mapped_column(String(20), nullable=True)
 
     # msgBody-derived content
-    subject = Column(String(500), nullable=True)
-    description = Column(Text, nullable=True)
-    region = Column(String(255), nullable=True)
-    notso_link = Column(Text, nullable=True)
-    company_name = Column(String(100), nullable=True)
+    subject: Mapped[Optional[str]] = mapped_column(String(500), nullable=True)
+    description: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    region: Mapped[Optional[str]] = mapped_column(String(255), nullable=True)
+    notso_link: Mapped[Optional[str]] = mapped_column(Text, nullable=True)
+    company_name: Mapped[Optional[str]] = mapped_column(String(100), nullable=True)
 
     # Time fields
-    publish_date = Column(DateTime(timezone=True), nullable=True)
-    effective_from = Column(DateTime(timezone=True), nullable=True)
-    effective_until = Column(DateTime(timezone=True), nullable=True)
+    publish_date: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    effective_from: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
+    effective_until: Mapped[Optional[datetime]] = mapped_column(
+        DateTime(timezone=True),
+        nullable=True,
+    )
 
     # Associated satellite(s). `sat_no` is a convenience for single-sat
     # notices; `sat_ids` holds the full list for multi-sat notices.
-    sat_no = Column(Integer, nullable=True)
-    sat_ids = Column(JSONB, nullable=True)
+    sat_no: Mapped[Optional[int]] = mapped_column(Integer, nullable=True)
+    sat_ids: Mapped[Optional[list[str]]] = mapped_column(JSONB, nullable=True)
 
-    raw = Column(JSONB, nullable=False)
+    raw: Mapped[dict[str, Any]] = mapped_column(JSONB, nullable=False)
 
     __table_args__ = (
         UniqueConstraint("udl_id", name="uq_notification_udl_id"),
