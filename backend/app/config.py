@@ -1,12 +1,18 @@
 from typing import List
 
-from pydantic_settings import BaseSettings
+from pydantic import Field
+from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
 class Settings(BaseSettings):
+    model_config = SettingsConfigDict(
+        env_file=".env",
+        extra="ignore",
+    )
+
     app_env: str = "development"
     app_secret_key: str
-    allowed_origins: List[str] = []
+    app_allowed_origins: List[str] = Field(default_factory=list)
 
     postgres_host: str
     postgres_port: int = 5432
@@ -20,6 +26,8 @@ class Settings(BaseSettings):
 
     mattermost_url: str = ""
     mattermost_bot_token: str = ""
+    mattermost_team_id: str = ""
+    mattermost_poll_interval: int = 60
 
     udl_base_url: str = "https://unifieddatalibrary.com/udl"
     udl_username: str = ""
@@ -29,8 +37,7 @@ class Settings(BaseSettings):
 
     anthropic_api_key: str = ""
 
-    class Config:
-        env_file = ".env"
+    procedure_storage_path: str = "/data/procedures"
 
     @property
     def database_url(self) -> str:
