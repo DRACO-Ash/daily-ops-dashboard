@@ -208,13 +208,25 @@ function Wait-DbReady {
     $base = Get-ComposeBase
     $probeArgs = $base + @("exec", "-T", "db", "pg_isready", "-U", "ops_user", "-d", "ops_dashboard")
     $maxTries = 60
-    for ($i = 0; $i -lt $maxTries; $i++) {
-        & docker @probeArgs *> $null
-        if ($LASTEXITCODE -eq 0) {
-            Write-Ok "Database is ready"
-            return
+    # PowerShell 5.1 wraps every native-command stderr line as a
+    # NativeCommandError when streams are redirected. Under
+    # `$ErrorActionPreference = "Stop"` that turns any docker warning
+    # (e.g. a deprecation notice) into a terminating error. Drop to
+    # Continue for the duration of the polling loop so transient
+    # warnings do not kill the script.
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        for ($i = 0; $i -lt $maxTries; $i++) {
+            & docker @probeArgs *> $null
+            if ($LASTEXITCODE -eq 0) {
+                Write-Ok "Database is ready"
+                return
+            }
+            Start-Sleep -Seconds 1
         }
-        Start-Sleep -Seconds 1
+    } finally {
+        $ErrorActionPreference = $prev
     }
     throw "Database failed to become ready after $maxTries seconds. Check 'docker compose logs db'."
 }
@@ -233,7 +245,13 @@ function Test-AdminExists {
         "psql", "-U", "ops_user", "-d", "ops_dashboard",
         "-tA", "-c", "SELECT COUNT(*) FROM app_user"
     )
-    $count = & docker @queryArgs 2>$null
+    $prev = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        $count = & docker @queryArgs 2>$null
+    } finally {
+        $ErrorActionPreference = $prev
+    }
     if ($LASTEXITCODE -ne 0) { return $false }
     return ([int]$count.Trim()) -gt 0
 }
