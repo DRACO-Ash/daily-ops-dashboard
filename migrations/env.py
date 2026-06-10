@@ -8,6 +8,7 @@ from app.models import (  # noqa: F401  ensure models are registered on Base.met
     assistant_evaluation,
     audit,
     elset,
+    maneuver,
     notification,
     procedure,
     revoked_jti,

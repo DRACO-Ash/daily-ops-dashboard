@@ -76,6 +76,24 @@ class UDLClient:
             params["maxResults"] = max_results
         return await self._get_list("/elset", params)
 
+    async def get_maneuvers(
+        self,
+        event_start_time_gte: datetime,
+        sat_no: Optional[int] = None,
+        data_mode: Optional[str] = None,
+        max_results: Optional[int] = None,
+    ) -> list[dict]:
+        # UDL filter operator for eventStartTime is `>` (same as the
+        # notification and elset endpoints — `>=` is not accepted).
+        params: dict[str, Any] = {"eventStartTime": f">{_format_epoch(event_start_time_gte)}"}
+        if sat_no is not None:
+            params["satNo"] = sat_no
+        if data_mode is not None:
+            params["dataMode"] = data_mode
+        if max_results is not None:
+            params["maxResults"] = max_results
+        return await self._get_list("/maneuver", params)
+
     async def get_notifications(
         self,
         msg_type: Optional[str] = None,

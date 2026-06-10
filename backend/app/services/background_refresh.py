@@ -24,6 +24,7 @@ from app.models.assistant_evaluation import AssistantEvaluation
 from app.models.notification import Notification
 from app.services.assistant import evaluate_notification, is_persistent_anthropic_failure
 from app.services.elset_ingest import ingest_elsets
+from app.services.maneuver_ingest import ingest_maneuvers
 from app.services.notification_ingest import ingest_notifications
 from app.services.udl_client import UDLAuthError, UDLClient, UDLClientError
 
@@ -50,6 +51,13 @@ async def _ingest_phase() -> None:
                     db,
                     client=client,
                     epoch_gte=window_start,
+                )
+            async with factory() as db:
+                await ingest_maneuvers(
+                    db,
+                    client=client,
+                    event_start_time_gte=window_start,
+                    data_mode="REAL",
                 )
         logger.info("Background ingest complete (window: last %sh)", window_hours)
     except UDLAuthError as exc:

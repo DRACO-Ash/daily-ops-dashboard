@@ -10,25 +10,36 @@ Slice 2 will add SGP4-derived orbital events to the prompt.
 
 import json
 import logging
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import anthropic
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
 from app.models.assistant_evaluation import AssistantEvaluation
+from app.models.maneuver import Maneuver
 from app.models.notification import Notification
 from app.models.procedure import Procedure
 from app.services.procedure_storage import read_preview
+
+_MANEUVER_LOOKBACK_DAYS = 30
+_MANEUVER_MAX_PER_PROMPT = 10
 
 logger = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
 You are an expert space operations analyst supporting a Daily Space
 Operations team. You assist the operator by reading UDL notifications
-(NOTSOs / TACREPs) alongside the team's own uploaded operational
-procedures, then recommending concrete next steps.
+(NOTSOs / TACREPs) alongside related maneuver records from fusion
+providers and the team's own uploaded operational procedures, then
+recommending concrete next steps.
+
+Maneuver records describe historical or in-progress thrust events for
+the same satellites referenced in the notification. Use them to spot
+patterns (e.g. recent maneuver may explain a new conjunction) and to
+contextualise the notification.
 
 You must respond with a single JSON object and nothing else. No prose
 before or after the JSON. Use this schema exactly:
@@ -109,6 +120,66 @@ def _format_notification(n: Notification) -> str:
     return "\n".join(lines)
 
 
+def _format_maneuver(m: Maneuver) -> str:
+    parts = [f"  - Sat {m.sat_no if m.sat_no is not None else '?'}"]
+    if m.event_start_time:
+        parts.append(f"start={m.event_start_time.isoformat()}")
+    if m.event_stop_time:
+        parts.append(f"stop={m.event_stop_time.isoformat()}")
+    if m.mnvr_type:
+        parts.append(f"type={m.mnvr_type}")
+    if m.maneuver_status:
+        parts.append(f"status={m.maneuver_status}")
+    if m.delta_v is not None:
+        parts.append(f"deltaV={m.delta_v}")
+    if m.source:
+        parts.append(f"source={m.source}")
+    head = " | ".join(parts)
+    if m.description:
+        return f"{head}\n    {m.description.strip()}"
+    return head
+
+
+def _extract_sat_nos(notification: Notification) -> list[int]:
+    nos: list[int] = []
+    if notification.sat_no is not None:
+        nos.append(notification.sat_no)
+    if notification.sat_ids:
+        for value in notification.sat_ids:
+            try:
+                nos.append(int(value))
+            except (TypeError, ValueError):
+                continue
+    # de-duplicate, preserve order
+    seen: set[int] = set()
+    ordered: list[int] = []
+    for n in nos:
+        if n not in seen:
+            seen.add(n)
+            ordered.append(n)
+    return ordered
+
+
+async def _load_relevant_maneuvers(db: AsyncSession, notification: Notification) -> list[Maneuver]:
+    sat_nos = _extract_sat_nos(notification)
+    if not sat_nos:
+        return []
+    window_start = datetime.now(timezone.utc) - timedelta(days=_MANEUVER_LOOKBACK_DAYS)
+    stmt = (
+        select(Maneuver)
+        .where(Maneuver.sat_no.in_(sat_nos))
+        .where(
+            or_(
+                Maneuver.event_start_time.is_(None),
+                Maneuver.event_start_time >= window_start,
+            )
+        )
+        .order_by(Maneuver.event_start_time.desc().nullslast())
+        .limit(_MANEUVER_MAX_PER_PROMPT)
+    )
+    return list((await db.execute(stmt)).scalars().all())
+
+
 def _format_procedure(p: Procedure) -> str:
     content, truncated = read_preview(p.id, p.filename, p.content_type)
     block = [
@@ -126,8 +197,18 @@ def _format_procedure(p: Procedure) -> str:
     return "\n".join(block)
 
 
-def _build_user_message(notification: Notification, procedures: list[Procedure]) -> str:
+def _build_user_message(
+    notification: Notification,
+    procedures: list[Procedure],
+    maneuvers: list[Maneuver],
+) -> str:
     parts = [_format_notification(notification), ""]
+    if maneuvers:
+        lines = [f"RELATED MANEUVERS (same satellite, last {_MANEUVER_LOOKBACK_DAYS} days):"]
+        lines.extend(_format_maneuver(m) for m in maneuvers)
+        parts.append("\n".join(lines))
+    else:
+        parts.append("RELATED MANEUVERS: (none for the satellite(s) in this notification)")
     if procedures:
         parts.append("AVAILABLE PROCEDURES:")
         parts.extend(_format_procedure(p) for p in procedures)
@@ -216,8 +297,9 @@ async def evaluate_notification(
     procedures = (
         (await db.execute(select(Procedure).order_by(Procedure.created_at))).scalars().all()
     )
+    maneuvers = await _load_relevant_maneuvers(db, notification)
 
-    user_message = _build_user_message(notification, list(procedures))
+    user_message = _build_user_message(notification, list(procedures), maneuvers)
 
     error: Optional[str] = None
     structured: dict[str, Any]

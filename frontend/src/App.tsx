@@ -7,6 +7,7 @@ import Dashboard from "./pages/Dashboard";
 import Elsets from "./pages/Elsets";
 import ElsetDetail from "./pages/ElsetDetail";
 import Login from "./pages/Login";
+import Maneuvers from "./pages/Maneuvers";
 import Notifications from "./pages/Notifications";
 import NotificationDetail from "./pages/NotificationDetail";
 import Procedures from "./pages/Procedures";
@@ -29,6 +30,7 @@ export default function App() {
             <Route path="/elsets/:id" element={<ElsetDetail />} />
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/notifications/:id" element={<NotificationDetail />} />
+            <Route path="/maneuvers" element={<Maneuvers />} />
             <Route path="/procedures" element={<Procedures />} />
             <Route path="/audit" element={<AuditLog />} />
           </Route>
