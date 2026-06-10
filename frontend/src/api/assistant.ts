@@ -1,5 +1,12 @@
 import { apiClient } from "./client";
-import type { AssistantEvaluation } from "../types";
+import type { AssistantEvaluation, AssistantFeed } from "../types";
+
+export async function getFeed(hours = 48, limit = 100): Promise<AssistantFeed> {
+  const { data } = await apiClient.get<AssistantFeed>("/assistant/feed", {
+    params: { hours, limit },
+  });
+  return data;
+}
 
 export async function getEvaluation(notificationId: string): Promise<AssistantEvaluation | null> {
   try {

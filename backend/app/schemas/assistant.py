@@ -4,6 +4,8 @@ from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict
 
+from app.schemas.notification import NotificationRead
+
 
 class ApplicableProcedure(BaseModel):
     procedure_id: Optional[str] = None
@@ -36,3 +38,17 @@ class AssistantEvaluationRead(BaseModel):
     model: str
     error: Optional[str] = None
     evaluated_at: datetime
+
+
+class AssistantFeedItem(BaseModel):
+    """Dashboard row: a notification, its latest evaluation, and a precomputed urgency rollup."""
+
+    notification: NotificationRead
+    evaluation: Optional[AssistantEvaluationRead] = None
+    urgency: str
+    top_action: Optional[str] = None
+
+
+class AssistantFeed(BaseModel):
+    items: list[AssistantFeedItem]
+    window_hours: int

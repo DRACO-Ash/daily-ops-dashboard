@@ -30,3 +30,17 @@ export interface AssistantEvaluation {
   error: string | null;
   evaluated_at: string;
 }
+
+export type FeedUrgency = "high" | "medium" | "low" | "none" | "pending";
+
+export interface AssistantFeedItem {
+  notification: import("./notification").Notification;
+  evaluation: AssistantEvaluation | null;
+  urgency: FeedUrgency | string;
+  top_action: string | null;
+}
+
+export interface AssistantFeed {
+  items: AssistantFeedItem[];
+  window_hours: number;
+}

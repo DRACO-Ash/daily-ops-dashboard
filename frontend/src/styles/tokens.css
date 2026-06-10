@@ -556,3 +556,134 @@ button:disabled {
   background: rgba(39, 174, 96, 0.15);
   color: var(--color-green);
 }
+
+.urgency-pill.urgency-pending {
+  background: rgba(107, 119, 133, 0.15);
+  color: var(--color-muted);
+}
+
+.dashboard-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+  flex-wrap: wrap;
+  margin-bottom: var(--space-4);
+}
+
+.dashboard-rollup {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+  gap: var(--space-3);
+  margin-bottom: var(--space-4);
+}
+
+.rollup-stat {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  text-align: center;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+}
+
+.rollup-stat.urgency-high {
+  border-top: 4px solid var(--color-error);
+}
+
+.rollup-stat.urgency-medium {
+  border-top: 4px solid #c67c00;
+}
+
+.rollup-stat.urgency-low {
+  border-top: 4px solid var(--color-green);
+}
+
+.rollup-stat.urgency-pending {
+  border-top: 4px solid var(--color-muted);
+}
+
+.rollup-count {
+  font-size: 2rem;
+  font-weight: 700;
+  color: var(--color-navy);
+}
+
+.rollup-label {
+  font-size: 0.8rem;
+  color: var(--color-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.dashboard-bucket {
+  margin-bottom: var(--space-4);
+}
+
+.dashboard-bucket:last-child {
+  margin-bottom: 0;
+}
+
+.dashboard-bucket h2 {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.bucket-count {
+  font-size: 0.9rem;
+  color: var(--color-muted);
+  font-weight: 400;
+}
+
+.action-feed {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.action-feed-item {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-sm);
+  padding: var(--space-3);
+  cursor: pointer;
+  transition: box-shadow 0.1s ease-in-out;
+}
+
+.action-feed-item:hover {
+  box-shadow: 0 2px 6px rgba(22, 38, 70, 0.08);
+  border-color: var(--color-blue-2);
+}
+
+.action-feed-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+.action-feed-class {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  margin-bottom: var(--space-2);
+}
+
+.action-feed-summary {
+  margin: var(--space-1) 0;
+  line-height: 1.5;
+}
+
+.action-feed-action {
+  font-size: 0.95rem;
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-bg);
+  border-radius: var(--radius-sm);
+  margin-top: var(--space-2);
+}
