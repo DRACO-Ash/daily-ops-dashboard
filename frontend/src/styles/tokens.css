@@ -456,3 +456,103 @@ button:disabled {
 .image-caption {
   color: var(--color-muted);
 }
+
+.muted {
+  color: var(--color-muted);
+  font-size: 0.85rem;
+}
+
+.assistant-panel {
+  border-top: 4px solid var(--color-blue-1);
+}
+
+.assistant-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+}
+
+.assistant-meta {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  font-size: 0.85rem;
+}
+
+.assistant-summary {
+  font-size: 1.05rem;
+  line-height: 1.5;
+  margin: var(--space-3) 0 var(--space-4);
+}
+
+.assistant-actions {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.assistant-actions li {
+  padding: var(--space-3);
+  border-left: 3px solid var(--color-blue-1);
+  background: var(--color-bg);
+  border-radius: var(--radius-sm);
+}
+
+.action-head {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-1);
+}
+
+.action-deadline {
+  font-size: 0.85rem;
+  color: var(--color-muted);
+  margin-bottom: var(--space-1);
+}
+
+.action-rationale {
+  font-size: 0.9rem;
+  color: var(--color-body);
+}
+
+.assistant-procedures {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.urgency-pill {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  background: var(--color-bg);
+  color: var(--color-muted);
+}
+
+.urgency-pill.urgency-high {
+  background: rgba(178, 58, 72, 0.15);
+  color: var(--color-error);
+}
+
+.urgency-pill.urgency-medium {
+  background: rgba(198, 124, 0, 0.15);
+  color: #c67c00;
+}
+
+.urgency-pill.urgency-low {
+  background: rgba(39, 174, 96, 0.15);
+  color: var(--color-green);
+}

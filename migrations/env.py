@@ -5,6 +5,7 @@ from alembic import context
 from app.config import settings
 from app.db.base import Base
 from app.models import (  # noqa: F401  ensure models are registered on Base.metadata
+    assistant_evaluation,
     audit,
     elset,
     notification,

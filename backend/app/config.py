@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     udl_verify_ssl: bool = True
 
     anthropic_api_key: str = ""
+    anthropic_model: str = "claude-3-5-sonnet-20241022"
+    anthropic_max_tokens: int = 2048
 
     procedure_storage_path: str = "/data/procedures"
 

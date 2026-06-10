@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, useParams } from "react-router-dom";
 import { getNotification } from "../api/notifications";
+import AssistantPanel from "../components/AssistantPanel";
 import type { NotificationDetail as NotificationDetailType } from "../types";
 
 interface NotsoImage {
@@ -93,6 +94,8 @@ export default function NotificationDetailPage() {
       </Link>
       <h1>{item.notso_identifier ?? item.notice_id ?? "Notification"}</h1>
       {item.event_class && <p className="detail-subtitle">{item.event_class}</p>}
+
+      <AssistantPanel notificationId={item.id} />
 
       <section className="card">
         <h2>Status</h2>
