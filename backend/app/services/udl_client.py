@@ -65,7 +65,11 @@ class UDLClient:
         sat_no: Optional[int] = None,
         max_results: Optional[int] = None,
     ) -> list[dict]:
-        params: dict[str, Any] = {"epoch": f">={_format_epoch(epoch_gte)}"}
+        # UDL's elset endpoint rejects `>=` and only accepts `>` as the
+        # interval operator (the notification endpoint behaves the same
+        # way). The microsecond difference between strict-greater-than
+        # and greater-than-or-equal is irrelevant in practice.
+        params: dict[str, Any] = {"epoch": f">{_format_epoch(epoch_gte)}"}
         if sat_no is not None:
             params["satNo"] = sat_no
         if max_results is not None:

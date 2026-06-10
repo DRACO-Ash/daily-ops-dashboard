@@ -22,7 +22,7 @@ from app.config import settings
 from app.db.session import get_session_factory
 from app.models.assistant_evaluation import AssistantEvaluation
 from app.models.notification import Notification
-from app.services.assistant import evaluate_notification
+from app.services.assistant import evaluate_notification, is_persistent_anthropic_failure
 from app.services.elset_ingest import ingest_elsets
 from app.services.notification_ingest import ingest_notifications
 from app.services.udl_client import UDLAuthError, UDLClient, UDLClientError
@@ -89,11 +89,19 @@ async def _auto_evaluate_phase() -> None:
     for notification_id in ids:
         async with factory() as db:
             try:
-                await evaluate_notification(db, notification_id)
+                evaluation = await evaluate_notification(db, notification_id)
                 await db.commit()
             except Exception:
                 logger.exception("Auto-evaluate failed for notification %s", notification_id)
                 await db.rollback()
+                continue
+        # If the evaluation persisted with a persistent-failure error
+        # (credits exhausted, auth, rate limit), every remaining call
+        # this cycle will hit the same wall; abort and wait for the
+        # operator to resolve the underlying issue.
+        if evaluation.error and is_persistent_anthropic_failure(evaluation.error):
+            logger.warning("Stopping auto-evaluate cycle early: %s", evaluation.error)
+            return
 
 
 async def _refresh_once() -> None:

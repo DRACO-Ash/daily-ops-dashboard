@@ -162,17 +162,45 @@ async def _call_claude(user_message: str) -> tuple[dict[str, Any], str]:
     if not settings.anthropic_api_key:
         raise AssistantError("ANTHROPIC_API_KEY is not configured")
     client = anthropic.AsyncAnthropic(api_key=settings.anthropic_api_key)
-    response = await client.messages.create(
-        model=settings.anthropic_model,
-        max_tokens=settings.anthropic_max_tokens,
-        system=_SYSTEM_PROMPT,
-        messages=[{"role": "user", "content": user_message}],
-    )
+    try:
+        response = await client.messages.create(
+            model=settings.anthropic_model,
+            max_tokens=settings.anthropic_max_tokens,
+            system=_SYSTEM_PROMPT,
+            messages=[{"role": "user", "content": user_message}],
+        )
+    except anthropic.APIError as exc:
+        # Surface SDK errors (auth, credit, rate limit, server) as
+        # AssistantError so evaluate_notification persists a row with
+        # the failure reason rather than letting the exception escape.
+        raise AssistantError(f"Anthropic API error: {exc}") from exc
     blocks = [b.text for b in response.content if getattr(b, "type", None) == "text"]
     if not blocks:
         raise AssistantError("Model response contained no text blocks")
     text = "\n".join(blocks)
     return _extract_json(text), settings.anthropic_model
+
+
+def is_persistent_anthropic_failure(error_message: Optional[str]) -> bool:
+    """True if the failure is unlikely to clear up within a poll cycle.
+
+    Used by the background poller to break out of the auto-evaluate
+    loop instead of burning the per-cycle quota against an outage that
+    every call will hit identically.
+    """
+    if not error_message:
+        return False
+    lower = error_message.lower()
+    return any(
+        needle in lower
+        for needle in (
+            "credit balance",
+            "rate limit",
+            "authentication",
+            "invalid api key",
+            "permission",
+        )
+    )
 
 
 async def evaluate_notification(
