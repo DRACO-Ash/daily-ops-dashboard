@@ -20,7 +20,10 @@ services:
     depends_on:
       - db
     networks:
+      # internal: DB connectivity. external: outbound calls to UDL
+      # and the Anthropic API (the assistant reasoning pipeline).
       - internal
+      - external
     volumes:
       - ../backend:/app
       # /workspace gives alembic access to alembic.ini and migrations/
