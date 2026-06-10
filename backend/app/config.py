@@ -42,6 +42,12 @@ class Settings(BaseSettings):
 
     procedure_storage_path: str = "/data/procedures"
 
+    background_refresh_enabled: bool = True
+    background_refresh_interval_seconds: int = 600
+    background_refresh_window_hours: int = 48
+    background_auto_evaluate: bool = True
+    background_max_evaluations_per_cycle: int = 20
+
     @property
     def database_url(self) -> str:
         # Percent-encode user and password so reserved characters

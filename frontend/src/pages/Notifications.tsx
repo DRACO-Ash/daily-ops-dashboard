@@ -1,16 +1,14 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { listNotifications, triggerNotificationIngest } from "../api/notifications";
+import { listNotifications } from "../api/notifications";
 import SortableHeader from "../components/SortableHeader";
 import type {
   Notification,
-  NotificationIngestResponse,
   NotificationSortColumn,
   SortDirection,
 } from "../types";
 
 const PAGE_SIZE = 50;
-const DEFAULT_MSG_TYPE = "TACREP_NOTSO";
 
 function formatDateTime(value: string | null): string {
   if (!value) return "n/a";
@@ -54,14 +52,6 @@ export default function NotificationsPage() {
   const [reloadToken, setReloadToken] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [ingestCreatedAt, setIngestCreatedAt] = useState("");
-  const [ingestMsgType, setIngestMsgType] = useState(DEFAULT_MSG_TYPE);
-  const [ingestDataMode, setIngestDataMode] = useState("REAL");
-  const [ingestSource, setIngestSource] = useState("JCO");
-  const [ingestMaxResults, setIngestMaxResults] = useState("");
-  const [ingesting, setIngesting] = useState(false);
-  const [ingestResult, setIngestResult] = useState<NotificationIngestResponse | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -112,29 +102,6 @@ export default function NotificationsPage() {
     setOffset(0);
   }
 
-  async function onIngestSubmit(event: FormEvent) {
-    event.preventDefault();
-    setIngesting(true);
-    setIngestResult(null);
-    setError(null);
-    try {
-      const result = await triggerNotificationIngest({
-        msg_type: ingestMsgType.trim() || undefined,
-        created_at_gte: ingestCreatedAt ? new Date(ingestCreatedAt).toISOString() : undefined,
-        data_mode: ingestDataMode.trim() || undefined,
-        source: ingestSource.trim() || undefined,
-        max_results: ingestMaxResults ? Number(ingestMaxResults) : undefined,
-      });
-      setIngestResult(result);
-      setOffset(0);
-      setReloadToken((t) => t + 1);
-    } catch (err) {
-      setError(extractErrorMessage(err, "Ingest failed."));
-    } finally {
-      setIngesting(false);
-    }
-  }
-
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -142,69 +109,10 @@ export default function NotificationsPage() {
     <div>
       <h1>Notifications</h1>
       <p className="muted-paragraph">
-        UDL serves Tactical Reports (TACREP) and Notices to Space Operators (NOTSO) through a single
-        notification endpoint under <code>msgType=TACREP_NOTSO</code>. Other UDL notification types
-        land here too.
+        Auto-refreshing in the background; the dashboard always reflects the last 48 hours of
+        TACREP_NOTSOs from UDL. The assistant analyses each new NOTSO against your uploaded
+        procedures as it arrives.
       </p>
-
-      <section className="card">
-        <h2>Trigger UDL ingest</h2>
-        <form onSubmit={onIngestSubmit} className="ingest-form">
-          <label>
-            Message type
-            <input
-              type="text"
-              value={ingestMsgType}
-              onChange={(e) => setIngestMsgType(e.target.value)}
-              placeholder="TACREP_NOTSO"
-            />
-          </label>
-          <label>
-            Created since (optional)
-            <input
-              type="datetime-local"
-              value={ingestCreatedAt}
-              onChange={(e) => setIngestCreatedAt(e.target.value)}
-            />
-          </label>
-          <label>
-            Data mode
-            <input
-              type="text"
-              value={ingestDataMode}
-              onChange={(e) => setIngestDataMode(e.target.value)}
-              placeholder="REAL"
-            />
-          </label>
-          <label>
-            Source
-            <input
-              type="text"
-              value={ingestSource}
-              onChange={(e) => setIngestSource(e.target.value)}
-              placeholder="JCO"
-            />
-          </label>
-          <label>
-            Max results (optional)
-            <input
-              type="number"
-              value={ingestMaxResults}
-              onChange={(e) => setIngestMaxResults(e.target.value)}
-              placeholder="e.g. 100"
-            />
-          </label>
-          <button type="submit" disabled={ingesting}>
-            {ingesting ? "Pulling..." : "Pull from UDL"}
-          </button>
-        </form>
-        {ingestResult && (
-          <div className="ingest-result">
-            Pulled {ingestResult.pulled} &middot; Inserted {ingestResult.inserted} &middot; Updated{" "}
-            {ingestResult.updated} &middot; Skipped {ingestResult.skipped}
-          </div>
-        )}
-      </section>
 
       <section className="card">
         <form onSubmit={onFilterSubmit} className="filter-form">
@@ -243,6 +151,9 @@ export default function NotificationsPage() {
             }}
           >
             Clear
+          </button>
+          <button type="button" onClick={() => setReloadToken((t) => t + 1)}>
+            Refresh
           </button>
         </form>
 

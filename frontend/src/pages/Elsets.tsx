@@ -1,8 +1,8 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { listElsets, triggerElsetIngest } from "../api/elsets";
+import { listElsets } from "../api/elsets";
 import SortableHeader from "../components/SortableHeader";
-import type { Elset, ElsetIngestResponse, ElsetSortColumn, SortDirection } from "../types";
+import type { Elset, ElsetSortColumn, SortDirection } from "../types";
 
 const PAGE_SIZE = 50;
 
@@ -33,12 +33,6 @@ export default function ElsetsPage() {
   const [reloadToken, setReloadToken] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-
-  const [ingestEpochGte, setIngestEpochGte] = useState("");
-  const [ingestSatNo, setIngestSatNo] = useState("");
-  const [ingestMaxResults, setIngestMaxResults] = useState("");
-  const [ingesting, setIngesting] = useState(false);
-  const [ingestResult, setIngestResult] = useState<ElsetIngestResponse | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -98,79 +92,16 @@ export default function ElsetsPage() {
     setOffset(0);
   }
 
-  async function onIngestSubmit(event: FormEvent) {
-    event.preventDefault();
-    if (!ingestEpochGte) {
-      setError("Epoch (since) is required for ingest.");
-      return;
-    }
-    setIngesting(true);
-    setIngestResult(null);
-    setError(null);
-    try {
-      const result = await triggerElsetIngest({
-        epoch_gte: new Date(ingestEpochGte).toISOString(),
-        sat_no: ingestSatNo ? Number(ingestSatNo) : undefined,
-        max_results: ingestMaxResults ? Number(ingestMaxResults) : undefined,
-      });
-      setIngestResult(result);
-      setOffset(0);
-      setReloadToken((t) => t + 1);
-    } catch (err) {
-      setError(extractErrorMessage(err, "Ingest failed."));
-    } finally {
-      setIngesting(false);
-    }
-  }
-
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
   return (
     <div>
       <h1>Element sets</h1>
-
-      <section className="card">
-        <h2>Trigger UDL ingest</h2>
-        <form onSubmit={onIngestSubmit} className="ingest-form">
-          <label>
-            Epoch since
-            <input
-              type="datetime-local"
-              value={ingestEpochGte}
-              onChange={(e) => setIngestEpochGte(e.target.value)}
-              required
-            />
-          </label>
-          <label>
-            Satellite number (optional)
-            <input
-              type="number"
-              value={ingestSatNo}
-              onChange={(e) => setIngestSatNo(e.target.value)}
-              placeholder="e.g. 25544"
-            />
-          </label>
-          <label>
-            Max results (optional)
-            <input
-              type="number"
-              value={ingestMaxResults}
-              onChange={(e) => setIngestMaxResults(e.target.value)}
-              placeholder="e.g. 100"
-            />
-          </label>
-          <button type="submit" disabled={ingesting}>
-            {ingesting ? "Pulling..." : "Pull from UDL"}
-          </button>
-        </form>
-        {ingestResult && (
-          <div className="ingest-result">
-            Pulled {ingestResult.pulled} &middot; Inserted {ingestResult.inserted} &middot; Updated{" "}
-            {ingestResult.updated} &middot; Skipped {ingestResult.skipped}
-          </div>
-        )}
-      </section>
+      <p className="muted-paragraph">
+        Auto-refreshing in the background; the dashboard always reflects the last 48 hours of UDL
+        element sets.
+      </p>
 
       <section className="card">
         <form onSubmit={onFilterSubmit} className="filter-form">
@@ -193,6 +124,9 @@ export default function ElsetsPage() {
             }}
           >
             Clear
+          </button>
+          <button type="button" onClick={() => setReloadToken((t) => t + 1)}>
+            Refresh
           </button>
         </form>
 
