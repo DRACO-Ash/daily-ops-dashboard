@@ -182,6 +182,17 @@ async def ingest_notifications(
     updated = 0
 
     if rows:
+        # SQLAlchemy requires every row in a multi-row VALUES clause to
+        # share the same column set. Real UDL responses have varied
+        # shapes per record (e.g. only some carry SatIds), so backfill
+        # missing keys with None before compiling.
+        all_keys: set[str] = set()
+        for r in rows:
+            all_keys.update(r.keys())
+        for r in rows:
+            for key in all_keys:
+                r.setdefault(key, None)
+
         existing_result = await db.execute(
             select(Notification.udl_id).where(Notification.udl_id.in_([r["udl_id"] for r in rows]))
         )

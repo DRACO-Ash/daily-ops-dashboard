@@ -120,6 +120,17 @@ async def ingest_elsets(
     updated = 0
 
     if rows:
+        # SQLAlchemy requires every row in a multi-row VALUES clause to
+        # share the same column set. UDL elset records can vary (e.g.
+        # some omit bstar or mean_motion_ddot), so backfill missing keys
+        # with None before compiling.
+        all_keys: set[str] = set()
+        for r in rows:
+            all_keys.update(r.keys())
+        for r in rows:
+            for key in all_keys:
+                r.setdefault(key, None)
+
         existing_result = await db.execute(
             select(Elset.udl_id).where(Elset.udl_id.in_([r["udl_id"] for r in rows]))
         )
