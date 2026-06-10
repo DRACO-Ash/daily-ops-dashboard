@@ -27,6 +27,9 @@ services:
       # at the repo root (the dev.ps1 script runs migrations via
       # `docker compose exec -w /workspace backend alembic upgrade head`).
       - ..:/workspace
+      # Persistent storage for operator-uploaded procedures. The path
+      # matches PROCEDURE_STORAGE_PATH in config defaults.
+      - procedures_data:/data/procedures
 
   frontend:
     build:
@@ -53,6 +56,7 @@ services:
 
 volumes:
   postgres_data:
+  procedures_data:
 
 networks:
   internal:
