@@ -11,6 +11,7 @@ import Maneuvers from "./pages/Maneuvers";
 import Notifications from "./pages/Notifications";
 import NotificationDetail from "./pages/NotificationDetail";
 import Procedures from "./pages/Procedures";
+import ShiftLog from "./pages/ShiftLog";
 
 export default function App() {
   return (
@@ -32,6 +33,7 @@ export default function App() {
             <Route path="/notifications/:id" element={<NotificationDetail />} />
             <Route path="/maneuvers" element={<Maneuvers />} />
             <Route path="/procedures" element={<Procedures />} />
+            <Route path="/shift-log" element={<ShiftLog />} />
             <Route path="/audit" element={<AuditLog />} />
           </Route>
         </Routes>

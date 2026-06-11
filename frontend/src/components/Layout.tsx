@@ -14,6 +14,7 @@ const NAV_ITEMS: ReadonlyArray<NavItem> = [
   { to: "/notifications", label: "Notifications" },
   { to: "/maneuvers", label: "Maneuvers" },
   { to: "/procedures", label: "Procedures" },
+  { to: "/shift-log", label: "Shift log" },
   { to: "/audit", label: "Audit log", requiredRoles: ["operator", "admin"] },
 ];
 

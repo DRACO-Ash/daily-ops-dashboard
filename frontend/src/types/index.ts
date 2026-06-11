@@ -4,4 +4,5 @@ export * from "./notification";
 export * from "./maneuver";
 export * from "./procedure";
 export * from "./assistant";
+export * from "./shift";
 export * from "./audit";

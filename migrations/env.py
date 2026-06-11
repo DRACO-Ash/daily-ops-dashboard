@@ -12,6 +12,8 @@ from app.models import (  # noqa: F401  ensure models are registered on Base.met
     notification,
     procedure,
     revoked_jti,
+    shift_note,
+    shift_summary,
     user,
 )
 from sqlalchemy.engine import Connection
