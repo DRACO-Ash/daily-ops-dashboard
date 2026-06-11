@@ -255,7 +255,15 @@ async def _call_claude(user_message: str) -> tuple[dict[str, Any], str]:
         # AssistantError so evaluate_notification persists a row with
         # the failure reason rather than letting the exception escape.
         raise AssistantError(f"Anthropic API error: {exc}") from exc
-    blocks = [b.text for b in response.content if getattr(b, "type", None) == "text"]
+    # response.content is list[TextBlock | ToolUseBlock]; only text
+    # blocks expose .text. Use getattr so mypy is happy without a
+    # cast or a hard isinstance import (the SDK's block class paths
+    # are not part of its public API contract).
+    blocks: list[str] = []
+    for b in response.content:
+        text_value = getattr(b, "text", None)
+        if isinstance(text_value, str):
+            blocks.append(text_value)
     if not blocks:
         raise AssistantError("Model response contained no text blocks")
     text = "\n".join(blocks)
