@@ -54,7 +54,7 @@ async def test_get_elsets_sends_correct_request_and_returns_records() -> None:
 
     assert records == expected_records
     assert captured["path"] == "/udl/elset"
-    assert captured["params"]["epoch"] == ">=2025-01-01T00:00:00.000000Z"
+    assert captured["params"]["epoch"] == ">2025-01-01T00:00:00.000000Z"
     assert captured["params"]["satNo"] == "25544"
     assert captured["params"]["maxResults"] == "100"
     assert captured["auth_header"] is not None
