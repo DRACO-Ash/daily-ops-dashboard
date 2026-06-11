@@ -101,11 +101,17 @@ async def ingest_elsets(
     client: UDLClient,
     epoch_gte: datetime,
     sat_no: Optional[int] = None,
+    data_mode: Optional[str] = None,
     max_results: Optional[int] = None,
     user_id: Optional[uuid.UUID] = None,
     ip_address: Optional[str] = None,
 ) -> IngestResult:
-    records = await client.get_elsets(epoch_gte=epoch_gte, sat_no=sat_no, max_results=max_results)
+    records = await client.get_elsets(
+        epoch_gte=epoch_gte,
+        sat_no=sat_no,
+        data_mode=data_mode,
+        max_results=max_results,
+    )
 
     rows: list[dict[str, Any]] = []
     skipped = 0

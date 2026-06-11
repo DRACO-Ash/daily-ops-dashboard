@@ -51,6 +51,7 @@ async def _ingest_phase() -> None:
                     db,
                     client=client,
                     epoch_gte=window_start,
+                    data_mode="REAL",
                 )
             async with factory() as db:
                 await ingest_maneuvers(

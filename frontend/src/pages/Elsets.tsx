@@ -1,8 +1,14 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { listElsets } from "../api/elsets";
+import { listElsets, triggerElsetIngest } from "../api/elsets";
 import SortableHeader from "../components/SortableHeader";
-import type { Elset, ElsetSortColumn, SortDirection } from "../types";
+import type { Elset, ElsetIngestResponse, ElsetSortColumn, SortDirection } from "../types";
+
+const LOOKUP_WINDOW_HOURS = 48;
+
+function windowStartIso(hoursBack: number): string {
+  return new Date(Date.now() - hoursBack * 3_600_000).toISOString();
+}
 
 const PAGE_SIZE = 50;
 
@@ -33,6 +39,10 @@ export default function ElsetsPage() {
   const [reloadToken, setReloadToken] = useState(0);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const [lookupSatNo, setLookupSatNo] = useState("");
+  const [lookupBusy, setLookupBusy] = useState(false);
+  const [lookupResult, setLookupResult] = useState<ElsetIngestResponse | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -92,6 +102,35 @@ export default function ElsetsPage() {
     setOffset(0);
   }
 
+  async function onLookupSubmit(event: FormEvent) {
+    event.preventDefault();
+    const trimmed = lookupSatNo.trim();
+    if (!trimmed) return;
+    const parsed = Number(trimmed);
+    if (Number.isNaN(parsed)) {
+      setError("Satellite number must be numeric.");
+      return;
+    }
+    setLookupBusy(true);
+    setLookupResult(null);
+    setError(null);
+    try {
+      const result = await triggerElsetIngest({
+        epoch_gte: windowStartIso(LOOKUP_WINDOW_HOURS),
+        sat_no: parsed,
+      });
+      setLookupResult(result);
+      setSatNoFilter(parsed);
+      setSatNoInput(String(parsed));
+      setOffset(0);
+      setReloadToken((t) => t + 1);
+    } catch (err) {
+      setError(extractErrorMessage(err, "UDL lookup failed."));
+    } finally {
+      setLookupBusy(false);
+    }
+  }
+
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -99,9 +138,32 @@ export default function ElsetsPage() {
     <div>
       <h1>Element sets</h1>
       <p className="muted-paragraph">
-        Auto-refreshing in the background; the dashboard always reflects the last 48 hours of UDL
-        element sets.
+        Auto-refreshing in the background. To pull the latest elsets for a specific satellite, enter
+        its number below.
       </p>
+
+      <section className="card">
+        <form onSubmit={onLookupSubmit} className="filter-form">
+          <label>
+            Lookup satellite (last {LOOKUP_WINDOW_HOURS}h)
+            <input
+              type="number"
+              value={lookupSatNo}
+              onChange={(e) => setLookupSatNo(e.target.value)}
+              placeholder="e.g. 25544"
+            />
+          </label>
+          <button type="submit" disabled={lookupBusy || !lookupSatNo.trim()}>
+            {lookupBusy ? "Pulling..." : "Lookup"}
+          </button>
+        </form>
+        {lookupResult && (
+          <div className="ingest-result">
+            Pulled {lookupResult.pulled} &middot; Inserted {lookupResult.inserted} &middot; Updated{" "}
+            {lookupResult.updated} &middot; Skipped {lookupResult.skipped}
+          </div>
+        )}
+      </section>
 
       <section className="card">
         <form onSubmit={onFilterSubmit} className="filter-form">

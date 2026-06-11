@@ -63,6 +63,7 @@ class UDLClient:
         self,
         epoch_gte: datetime,
         sat_no: Optional[int] = None,
+        data_mode: Optional[str] = None,
         max_results: Optional[int] = None,
     ) -> list[dict]:
         # UDL's elset endpoint rejects `>=` and only accepts `>` as the
@@ -72,6 +73,8 @@ class UDLClient:
         params: dict[str, Any] = {"epoch": f">{_format_epoch(epoch_gte)}"}
         if sat_no is not None:
             params["satNo"] = sat_no
+        if data_mode is not None:
+            params["dataMode"] = data_mode
         if max_results is not None:
             params["maxResults"] = max_results
         return await self._get_list("/elset", params)
