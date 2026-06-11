@@ -1,3 +1,4 @@
+import logging
 import uuid
 from dataclasses import dataclass
 from datetime import datetime
@@ -11,6 +12,14 @@ from sqlalchemy.sql import func
 from app.models.elset import Elset
 from app.services.audit import write_audit
 from app.services.udl_client import UDLClient
+
+logger = logging.getLogger(__name__)
+
+# UDL has historically used a few different field names across endpoints
+# and sources. Accept any of these for the identifying columns.
+_ID_KEYS = ("id", "idElset", "elsetId")
+_SAT_NO_KEYS = ("satNo", "sat_no", "noradCatId", "noradId")
+_EPOCH_KEYS = ("epoch", "epochDate", "epochTime")
 
 
 @dataclass
@@ -72,27 +81,68 @@ UPDATABLE_COLUMNS: list[str] = [
 
 
 def _parse_epoch(value: str) -> datetime:
-    return datetime.fromisoformat(value)
+    # UDL often emits trailing Z (Zulu / UTC). fromisoformat() didn't
+    # accept that on Python < 3.11; we normalise it for safety.
+    return datetime.fromisoformat(value.replace("Z", "+00:00"))
+
+
+def _first_present(record: dict[str, Any], keys: tuple[str, ...]) -> Any:
+    for k in keys:
+        if k in record and record[k] not in (None, ""):
+            return record[k]
+    return None
+
+
+def _coerce_int(value: Any) -> Optional[int]:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def _map_udl_record(record: dict[str, Any]) -> Optional[dict[str, Any]]:
-    udl_id = record.get("id")
-    sat_no = record.get("satNo")
-    epoch = record.get("epoch")
-    if not udl_id or sat_no is None or not epoch:
+    udl_id = _first_present(record, _ID_KEYS)
+    sat_no_raw = _first_present(record, _SAT_NO_KEYS)
+    epoch_raw = _first_present(record, _EPOCH_KEYS)
+
+    sat_no = _coerce_int(sat_no_raw) if sat_no_raw is not None else None
+
+    if not udl_id or sat_no is None or not epoch_raw:
+        # Diagnostic: tell the operator what we saw so we can extend
+        # the field-name set if UDL is using something new. Sampled at
+        # WARNING; let the caller decide how often to surface this.
+        logger.warning(
+            "Skipping UDL elset record: id=%r sat_no=%r epoch=%r keys=%s",
+            udl_id,
+            sat_no_raw,
+            epoch_raw,
+            sorted(record.keys()),
+        )
         return None
 
     mapped: dict[str, Any] = {
         "udl_id": str(udl_id),
+        "sat_no": sat_no,
         "raw": record,
     }
+    if isinstance(epoch_raw, str):
+        try:
+            mapped["epoch"] = _parse_epoch(epoch_raw)
+        except ValueError:
+            logger.warning("Could not parse elset epoch %r; skipping", epoch_raw)
+            return None
+    elif isinstance(epoch_raw, datetime):
+        mapped["epoch"] = epoch_raw
+    else:
+        logger.warning("Unexpected elset epoch type %s; skipping", type(epoch_raw))
+        return None
+
     for udl_field, model_field in UDL_TO_MODEL_FIELDS.items():
+        if udl_field in ("satNo", "epoch"):
+            continue  # already populated above with the tolerant lookup
         if udl_field not in record:
             continue
-        value = record[udl_field]
-        if udl_field == "epoch" and isinstance(value, str):
-            value = _parse_epoch(value)
-        mapped[model_field] = value
+        mapped[model_field] = record[udl_field]
     return mapped
 
 
