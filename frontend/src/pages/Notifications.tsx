@@ -2,11 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { listNotifications } from "../api/notifications";
 import SortableHeader from "../components/SortableHeader";
-import type {
-  Notification,
-  NotificationSortColumn,
-  SortDirection,
-} from "../types";
+import type { Notification, NotificationSortColumn, SortDirection } from "../types";
 
 const PAGE_SIZE = 50;
 

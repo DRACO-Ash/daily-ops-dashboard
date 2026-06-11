@@ -416,8 +416,7 @@ button:disabled {
   justify-content: center;
   height: 100vh;
   background:
-    radial-gradient(ellipse at top, rgba(122, 167, 224, 0.06) 0%, transparent 60%),
-    var(--color-bg);
+    radial-gradient(ellipse at top, rgba(122, 167, 224, 0.06) 0%, transparent 60%), var(--color-bg);
 }
 
 .login-form {

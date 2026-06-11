@@ -107,8 +107,8 @@ export default function Dashboard() {
         <div>
           <h1>What needs your attention</h1>
           <p className="muted-paragraph">
-            Last {windowHours} hours of TACREP_NOTSOs, evaluated against your uploaded
-            procedures. Most urgent first.
+            Last {windowHours} hours of TACREP_NOTSOs, evaluated against your uploaded procedures.
+            Most urgent first.
             {lastLoadedAt && (
               <>
                 {" "}
@@ -182,9 +182,7 @@ export default function Dashboard() {
                           <strong>{n.notso_identifier ?? n.notice_id ?? "Notification"}</strong>
                           <span className="muted">{formatDateTime(n.udl_created_at)}</span>
                         </div>
-                        {n.event_class && (
-                          <div className="action-feed-class">{n.event_class}</div>
-                        )}
+                        {n.event_class && <div className="action-feed-class">{n.event_class}</div>}
                         {summary && <p className="action-feed-summary">{summary}</p>}
                         {it.top_action && (
                           <div className="action-feed-action">

@@ -1,10 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import {
-  deleteProcedure,
-  getProcedure,
-  listProcedures,
-  uploadProcedure,
-} from "../api/procedures";
+import { deleteProcedure, getProcedure, listProcedures, uploadProcedure } from "../api/procedures";
 import type { Procedure, ProcedureContent } from "../types";
 
 function formatDateTime(value: string): string {
@@ -106,8 +101,8 @@ export default function ProceduresPage() {
     <div>
       <h1>Procedures</h1>
       <p className="muted-paragraph">
-        Upload operations procedures here. The assistant reads them at evaluation time and uses
-        them to recommend next-step actions for each NOTSO.
+        Upload operations procedures here. The assistant reads them at evaluation time and uses them
+        to recommend next-step actions for each NOTSO.
       </p>
 
       <section className="card">
