@@ -41,12 +41,16 @@ class AssistantEvaluationRead(BaseModel):
 
 
 class AssistantFeedItem(BaseModel):
-    """Dashboard row: a notification, its latest evaluation, and a precomputed urgency rollup."""
+    """Dashboard row: a notification, its latest evaluation, the cross-version
+    event summary, and a precomputed urgency rollup."""
 
     notification: NotificationRead
     evaluation: Optional[AssistantEvaluationRead] = None
     urgency: str
     top_action: Optional[str] = None
+    event_summary: Optional[str] = None
+    event_publication_count: Optional[int] = None
+    event_key: Optional[str] = None
 
 
 class AssistantFeed(BaseModel):

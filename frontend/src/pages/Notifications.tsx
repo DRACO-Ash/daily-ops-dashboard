@@ -1,6 +1,6 @@
 import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { listNotifications } from "../api/notifications";
+import { listNotifications, refreshNotificationsNow } from "../api/notifications";
 import SortableHeader from "../components/SortableHeader";
 import type { Notification, NotificationSortColumn, SortDirection } from "../types";
 
@@ -47,6 +47,7 @@ export default function NotificationsPage() {
   const [sortDirection, setSortDirection] = useState<SortDirection>("desc");
   const [reloadToken, setReloadToken] = useState(0);
   const [loading, setLoading] = useState(false);
+  const [pulling, setPulling] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -98,6 +99,23 @@ export default function NotificationsPage() {
     setOffset(0);
   }
 
+  async function onPullFromUdl() {
+    setPulling(true);
+    setError(null);
+    try {
+      await refreshNotificationsNow();
+      setReloadToken((t) => t + 1);
+    } catch (err) {
+      const detail =
+        err && typeof err === "object" && "response" in err
+          ? ((err as { response?: { data?: { detail?: unknown } } }).response?.data?.detail ?? null)
+          : null;
+      setError(typeof detail === "string" ? detail : "UDL pull failed.");
+    } finally {
+      setPulling(false);
+    }
+  }
+
   const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
   const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
 
@@ -105,9 +123,9 @@ export default function NotificationsPage() {
     <div>
       <h1>Notifications</h1>
       <p className="muted-paragraph">
-        Auto-refreshing in the background; the dashboard always reflects the last 48 hours of
+        Auto-refreshing hourly in the background; the dashboard always reflects the last 5 days of
         TACREP_NOTSOs from UDL. The assistant analyses each new NOTSO against your uploaded
-        procedures as it arrives.
+        procedures as it arrives. Use Pull from UDL to force a fresh cycle now.
       </p>
 
       <section className="card">
@@ -150,6 +168,9 @@ export default function NotificationsPage() {
           </button>
           <button type="button" onClick={() => setReloadToken((t) => t + 1)}>
             Refresh
+          </button>
+          <button type="button" onClick={onPullFromUdl} disabled={pulling}>
+            {pulling ? "Pulling..." : "Pull from UDL"}
           </button>
         </form>
 

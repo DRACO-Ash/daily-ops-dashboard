@@ -19,7 +19,7 @@ from app.api.v1.routes import (
 from app.config import settings
 from app.core.logging import configure_logging
 from app.core.request_id import REQUEST_ID_HEADER, RequestIDMiddleware
-from app.services.background_refresh import background_refresh_loop
+from app.services.background_refresh import elset_loop, maneuver_loop, notification_loop
 
 configure_logging()
 
@@ -28,20 +28,23 @@ logger = logging.getLogger(__name__)
 
 @asynccontextmanager
 async def lifespan(_app: FastAPI):
-    task: asyncio.Task | None = None
+    tasks: list[asyncio.Task] = []
     if settings.background_refresh_enabled:
-        task = asyncio.create_task(background_refresh_loop())
+        tasks.append(asyncio.create_task(notification_loop()))
+        tasks.append(asyncio.create_task(elset_loop()))
+        tasks.append(asyncio.create_task(maneuver_loop()))
     try:
         yield
     finally:
-        if task is not None:
+        for task in tasks:
             task.cancel()
+        for task in tasks:
             try:
                 await task
             except asyncio.CancelledError:
                 pass
             except Exception:
-                logger.exception("Background refresh task exited with error")
+                logger.exception("Background task exited with error")
 
 
 app = FastAPI(

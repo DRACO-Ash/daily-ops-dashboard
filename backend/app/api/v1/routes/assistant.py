@@ -1,13 +1,16 @@
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import settings
 from app.db.session import get_db
 from app.dependencies import get_current_user
 from app.models.assistant_evaluation import AssistantEvaluation
+from app.models.event_summary import EventSummary
 from app.models.notification import Notification
 from app.models.user import User
 from app.schemas.assistant import (
@@ -22,6 +25,7 @@ from app.services.assistant import (
     get_latest_evaluation,
 )
 from app.services.audit import write_audit
+from app.services.event_summary import compute_event_key
 from app.services.notification_query import aliased_deduped_notifications
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
@@ -58,18 +62,19 @@ def _rollup_urgency(evaluation: AssistantEvaluation | None) -> tuple[str, str | 
 @router.get("/feed", response_model=AssistantFeed)
 async def feed(
     limit: int = Query(100, ge=1, le=500),
-    hours: int = Query(48, ge=1, le=720),
+    hours: Optional[int] = Query(None, ge=1, le=720),
     db: AsyncSession = Depends(get_db),
     _current_user: User = Depends(get_current_user),
 ) -> AssistantFeed:
-    window_start = datetime.now(timezone.utc) - timedelta(hours=hours)
+    effective_hours = hours or settings.background_notification_window_hours
+    window_start = datetime.now(timezone.utc) - timedelta(hours=effective_hours)
     notif_alias, _dedup_subq = aliased_deduped_notifications(
         [Notification.udl_created_at >= window_start]
     )
     notif_stmt = select(notif_alias).order_by(notif_alias.udl_created_at.desc()).limit(limit)
     notifications = list((await db.execute(notif_stmt)).scalars().all())
     if not notifications:
-        return AssistantFeed(items=[], window_hours=hours)
+        return AssistantFeed(items=[], window_hours=effective_hours)
 
     eval_stmt = select(AssistantEvaluation).where(
         AssistantEvaluation.notification_id.in_([n.id for n in notifications])
@@ -80,16 +85,34 @@ async def feed(
         if existing is None or row.evaluated_at > existing.evaluated_at:
             latest_by_nid[row.notification_id] = row
 
+    event_keys_by_nid: dict[UUID, str] = {n.id: compute_event_key(n) for n in notifications}
+    unique_keys = list({k for k in event_keys_by_nid.values()})
+    summary_by_key: dict[str, EventSummary] = {}
+    if unique_keys:
+        summary_rows = (
+            (await db.execute(select(EventSummary).where(EventSummary.event_key.in_(unique_keys))))
+            .scalars()
+            .all()
+        )
+        summary_by_key = {row.event_key: row for row in summary_rows}
+
     items: list[AssistantFeedItem] = []
     for n in notifications:
         ev = latest_by_nid.get(n.id)
         urgency, top_action = _rollup_urgency(ev)
+        event_key = event_keys_by_nid.get(n.id)
+        summary_row = summary_by_key.get(event_key) if event_key else None
         items.append(
             AssistantFeedItem(
                 notification=NotificationRead.model_validate(n),
                 evaluation=AssistantEvaluationRead.model_validate(ev) if ev else None,
                 urgency=urgency,
                 top_action=top_action,
+                event_summary=(
+                    summary_row.narrative if summary_row and not summary_row.error else None
+                ),
+                event_publication_count=(summary_row.publication_count if summary_row else None),
+                event_key=event_key,
             )
         )
 
@@ -101,7 +124,7 @@ async def feed(
         reverse=True,
     )
 
-    return AssistantFeed(items=items, window_hours=hours)
+    return AssistantFeed(items=items, window_hours=effective_hours)
 
 
 @router.get("/evaluation/{notification_id}", response_model=AssistantEvaluationRead)

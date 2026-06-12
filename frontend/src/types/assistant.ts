@@ -38,6 +38,9 @@ export interface AssistantFeedItem {
   evaluation: AssistantEvaluation | null;
   urgency: FeedUrgency | string;
   top_action: string | null;
+  event_summary: string | null;
+  event_publication_count: number | null;
+  event_key: string | null;
 }
 
 export interface AssistantFeed {

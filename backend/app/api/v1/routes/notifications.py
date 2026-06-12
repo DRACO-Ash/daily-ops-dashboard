@@ -18,6 +18,7 @@ from app.schemas.notification import (
     NotificationPage,
     NotificationRead,
 )
+from app.services.background_refresh import run_pull_notifications_now
 from app.services.notification_ingest import ingest_notifications
 from app.services.notification_query import aliased_deduped_notifications
 from app.services.udl_client import UDLAuthError, UDLClient, UDLClientError
@@ -140,3 +141,20 @@ async def trigger_notification_ingest(
         updated=result.updated,
         skipped=result.skipped,
     )
+
+
+@router.post("/refresh", status_code=status.HTTP_202_ACCEPTED)
+async def refresh_notifications_now(
+    _current_user: User = Depends(get_current_user),
+) -> dict:
+    """Trigger the notification pipeline immediately (UDL pull + auto-evaluate +
+    event-summary refresh) without waiting for the hourly cadence. Returns once
+    the cycle has completed so the operator's subsequent reload reflects the
+    fresh state."""
+    try:
+        await run_pull_notifications_now()
+    except UDLAuthError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    except UDLClientError as exc:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(exc)) from exc
+    return {"status": "complete"}

@@ -183,6 +183,17 @@ export default function Dashboard() {
                           <span className="muted">{formatDateTime(n.udl_created_at)}</span>
                         </div>
                         {n.event_class && <div className="action-feed-class">{n.event_class}</div>}
+                        {it.event_summary && (
+                          <p className="action-feed-evolution">
+                            <span className="evolution-label">
+                              Event evolution
+                              {it.event_publication_count && it.event_publication_count > 1 && (
+                                <> &middot; {it.event_publication_count} publications</>
+                              )}
+                            </span>
+                            {it.event_summary}
+                          </p>
+                        )}
                         {summary && <p className="action-feed-summary">{summary}</p>}
                         {it.top_action && (
                           <div className="action-feed-action">

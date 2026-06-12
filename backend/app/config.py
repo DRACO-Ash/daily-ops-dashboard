@@ -43,10 +43,20 @@ class Settings(BaseSettings):
     procedure_storage_path: str = "/data/procedures"
 
     background_refresh_enabled: bool = True
-    background_refresh_interval_seconds: int = 600
-    background_refresh_window_hours: int = 48
     background_auto_evaluate: bool = True
     background_max_evaluations_per_cycle: int = 20
+    background_max_event_summaries_per_cycle: int = 20
+
+    # Per-surface cadences. Notifications change slowly and we want a
+    # wide picture (5 days), so they refresh hourly. Maneuvers and
+    # elsets are time-critical at the satellite level and stay on a
+    # 10-minute cycle.
+    background_notification_interval_seconds: int = 3600
+    background_notification_window_hours: int = 120
+    background_elset_interval_seconds: int = 600
+    background_elset_window_hours: int = 48
+    background_maneuver_interval_seconds: int = 600
+    background_maneuver_window_hours: int = 48
 
     @property
     def database_url(self) -> str:

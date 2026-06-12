@@ -30,3 +30,7 @@ export async function triggerNotificationIngest(
   );
   return data;
 }
+
+export async function refreshNotificationsNow(): Promise<void> {
+  await apiClient.post("/notifications/refresh");
+}
