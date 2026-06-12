@@ -22,6 +22,7 @@ from app.services.assistant import (
     get_latest_evaluation,
 )
 from app.services.audit import write_audit
+from app.services.notification_query import aliased_deduped_notifications
 
 router = APIRouter(prefix="/assistant", tags=["assistant"])
 
@@ -62,12 +63,10 @@ async def feed(
     _current_user: User = Depends(get_current_user),
 ) -> AssistantFeed:
     window_start = datetime.now(timezone.utc) - timedelta(hours=hours)
-    notif_stmt = (
-        select(Notification)
-        .where(Notification.udl_created_at >= window_start)
-        .order_by(Notification.udl_created_at.desc())
-        .limit(limit)
+    notif_alias, _dedup_subq = aliased_deduped_notifications(
+        [Notification.udl_created_at >= window_start]
     )
+    notif_stmt = select(notif_alias).order_by(notif_alias.udl_created_at.desc()).limit(limit)
     notifications = list((await db.execute(notif_stmt)).scalars().all())
     if not notifications:
         return AssistantFeed(items=[], window_hours=hours)

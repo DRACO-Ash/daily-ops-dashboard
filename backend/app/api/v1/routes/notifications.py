@@ -19,6 +19,7 @@ from app.schemas.notification import (
     NotificationRead,
 )
 from app.services.notification_ingest import ingest_notifications
+from app.services.notification_query import aliased_deduped_notifications
 from app.services.udl_client import UDLAuthError, UDLClient, UDLClientError
 
 router = APIRouter(prefix="/notifications", tags=["notifications"])
@@ -54,8 +55,7 @@ async def list_notifications(
     db: AsyncSession = Depends(get_db),
     _current_user: User = Depends(get_current_user),
 ) -> NotificationPage:
-    base = select(Notification)
-    conditions = []
+    conditions: list = []
     if msg_type is not None:
         conditions.append(Notification.msg_type == msg_type)
     if event_type is not None:
@@ -70,16 +70,19 @@ async def list_notifications(
         conditions.append(Notification.effective_from <= effective_from_lte)
     if created_at_gte is not None:
         conditions.append(Notification.udl_created_at >= created_at_gte)
-    if conditions:
-        base = base.where(*conditions)
 
-    count_stmt = select(sa_func.count()).select_from(base.subquery())
+    notif_alias, dedup_subq = aliased_deduped_notifications(conditions)
+
+    count_stmt = select(sa_func.count()).select_from(dedup_subq)
     total = (await db.execute(count_stmt)).scalar_one()
 
-    sort_column = getattr(Notification, sort_by)
+    sort_column = getattr(notif_alias, sort_by)
     order = sort_column.asc() if sort_dir == "asc" else sort_column.desc()
     items_stmt = (
-        base.order_by(order.nullslast(), Notification.created_at.desc()).limit(limit).offset(offset)
+        select(notif_alias)
+        .order_by(order.nullslast(), notif_alias.created_at.desc())
+        .limit(limit)
+        .offset(offset)
     )
     items_result = await db.execute(items_stmt)
     items = items_result.scalars().all()

@@ -26,6 +26,7 @@ from app.services.assistant import evaluate_notification, is_persistent_anthropi
 from app.services.elset_ingest import ingest_elsets
 from app.services.maneuver_ingest import ingest_maneuvers
 from app.services.notification_ingest import ingest_notifications
+from app.services.notification_query import aliased_deduped_notifications
 from app.services.udl_client import UDLAuthError, UDLClient, UDLClientError
 
 logger = logging.getLogger(__name__)
@@ -79,15 +80,20 @@ async def _auto_evaluate_phase() -> None:
     limit = settings.background_max_evaluations_per_cycle
 
     async with factory() as db:
+        # Only evaluate the latest version of each logical notice — UDL
+        # often re-publishes the same Event_Id many times, and we don't
+        # want to spend Claude tokens on every duplicate.
+        notif_alias, _dedup_subq = aliased_deduped_notifications(
+            [Notification.udl_created_at >= window_start]
+        )
         stmt = (
-            select(Notification.id)
+            select(notif_alias.id)
             .outerjoin(
                 AssistantEvaluation,
-                AssistantEvaluation.notification_id == Notification.id,
+                AssistantEvaluation.notification_id == notif_alias.id,
             )
             .where(AssistantEvaluation.id.is_(None))
-            .where(Notification.udl_created_at >= window_start)
-            .order_by(Notification.udl_created_at.desc())
+            .order_by(notif_alias.udl_created_at.desc())
             .limit(limit)
         )
         ids = [row[0] for row in (await db.execute(stmt)).all()]
