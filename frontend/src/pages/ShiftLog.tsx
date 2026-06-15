@@ -9,6 +9,7 @@ import {
   shiftExportUrl,
   updateShiftNote,
 } from "../api/shift";
+import EventTimersPanel from "../components/EventTimersPanel";
 import type { ShiftNote, ShiftSummary } from "../types";
 
 function todayUtcIso(): string {
@@ -243,6 +244,8 @@ export default function ShiftLogPage() {
       </div>
 
       {error && <div className="form-error">{error}</div>}
+
+      <EventTimersPanel />
 
       <section className="card shift-entry">
         <h2>New entry</h2>

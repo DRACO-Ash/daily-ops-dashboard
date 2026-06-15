@@ -10,6 +10,7 @@ from app.api.v1.routes import (
     audit,
     auth,
     elsets,
+    event_timers,
     health,
     maneuvers,
     notifications,
@@ -73,5 +74,6 @@ app.include_router(notifications.router, prefix="/api/v1")
 app.include_router(maneuvers.router, prefix="/api/v1")
 app.include_router(procedures.router, prefix="/api/v1")
 app.include_router(shift_log.router, prefix="/api/v1")
+app.include_router(event_timers.router, prefix="/api/v1")
 app.include_router(assistant.router, prefix="/api/v1")
 app.include_router(audit.router, prefix="/api/v1")

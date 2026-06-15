@@ -5,4 +5,5 @@ export * from "./maneuver";
 export * from "./procedure";
 export * from "./assistant";
 export * from "./shift";
+export * from "./event_timer";
 export * from "./audit";

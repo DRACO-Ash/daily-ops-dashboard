@@ -1,5 +1,7 @@
 import { Link, Outlet, useLocation } from "react-router-dom";
 import { useAuth } from "../context/AuthContext";
+import { EventTimersProvider } from "../context/EventTimersContext";
+import TimerBanner from "./TimerBanner";
 import type { UserRole } from "../types";
 
 interface NavItem {
@@ -29,32 +31,35 @@ export default function Layout() {
   });
 
   return (
-    <div className="app-shell">
-      <header className="app-header">
-        <div className="app-title">Daily Operations Dashboard</div>
-        <div className="app-header-right">
-          {user && <span className="app-user">{user.username}</span>}
-          <button type="button" className="logout-btn" onClick={logout}>
-            Sign out
-          </button>
+    <EventTimersProvider>
+      <div className="app-shell">
+        <header className="app-header">
+          <div className="app-title">Daily Operations Dashboard</div>
+          <div className="app-header-right">
+            {user && <span className="app-user">{user.username}</span>}
+            <button type="button" className="logout-btn" onClick={logout}>
+              Sign out
+            </button>
+          </div>
+        </header>
+        <TimerBanner />
+        <div className="app-body">
+          <nav className="app-nav">
+            {visibleItems.map((item) => (
+              <Link
+                key={item.to}
+                to={item.to}
+                className={pathname === item.to ? "nav-link active" : "nav-link"}
+              >
+                {item.label}
+              </Link>
+            ))}
+          </nav>
+          <main className="app-main">
+            <Outlet />
+          </main>
         </div>
-      </header>
-      <div className="app-body">
-        <nav className="app-nav">
-          {visibleItems.map((item) => (
-            <Link
-              key={item.to}
-              to={item.to}
-              className={pathname === item.to ? "nav-link active" : "nav-link"}
-            >
-              {item.label}
-            </Link>
-          ))}
-        </nav>
-        <main className="app-main">
-          <Outlet />
-        </main>
       </div>
-    </div>
+    </EventTimersProvider>
   );
 }
