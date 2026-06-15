@@ -220,12 +220,34 @@ def _build_user_message(
 
 
 def _extract_json(text: str) -> dict[str, Any]:
-    """Pull the first balanced JSON object out of a model response."""
+    """Pull the first balanced JSON object out of a model response.
+
+    Walks the text character by character tracking brace depth, but
+    skips characters inside string literals so a `{` or `}` appearing
+    inside a quoted value (e.g. a procedure snippet Claude is citing)
+    doesn't throw the counter off and produce a spurious "unterminated"
+    error.
+    """
     start = text.find("{")
     if start == -1:
         raise AssistantError("Model response contained no JSON object")
     depth = 0
-    for i, ch in enumerate(text[start:], start=start):
+    in_string = False
+    escape = False
+    for i in range(start, len(text)):
+        ch = text[i]
+        if escape:
+            escape = False
+            continue
+        if in_string:
+            if ch == "\\":
+                escape = True
+            elif ch == '"':
+                in_string = False
+            continue
+        if ch == '"':
+            in_string = True
+            continue
         if ch == "{":
             depth += 1
         elif ch == "}":
@@ -255,6 +277,14 @@ async def _call_claude(user_message: str) -> tuple[dict[str, Any], str]:
         # AssistantError so evaluate_notification persists a row with
         # the failure reason rather than letting the exception escape.
         raise AssistantError(f"Anthropic API error: {exc}") from exc
+    if response.stop_reason == "max_tokens":
+        # Truncated mid-output; the JSON will be incomplete. Surface a
+        # specific error rather than letting the parser fail later on
+        # the half-written object with a cryptic "unterminated" message.
+        raise AssistantError(
+            f"Model response was truncated at {settings.anthropic_max_tokens} tokens "
+            "before completing the JSON. Raise ANTHROPIC_MAX_TOKENS."
+        )
     # response.content is list[TextBlock | ToolUseBlock]; only text
     # blocks expose .text. Use getattr so mypy is happy without a
     # cast or a hard isinstance import (the SDK's block class paths
