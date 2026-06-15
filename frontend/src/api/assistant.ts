@@ -1,10 +1,13 @@
 import { apiClient } from "./client";
 import type { AssistantEvaluation, AssistantFeed } from "../types";
 
-export async function getFeed(hours = 48, limit = 100): Promise<AssistantFeed> {
-  const { data } = await apiClient.get<AssistantFeed>("/assistant/feed", {
-    params: { hours, limit },
-  });
+export async function getFeed(hours?: number, limit = 100): Promise<AssistantFeed> {
+  // Omitting `hours` lets the backend fall back to its configured
+  // notification window (5 days by default) so the dashboard stays
+  // in sync with the ingest pipeline without the client guessing.
+  const params: Record<string, number> = { limit };
+  if (hours !== undefined) params.hours = hours;
+  const { data } = await apiClient.get<AssistantFeed>("/assistant/feed", { params });
   return data;
 }
 

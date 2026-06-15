@@ -10,6 +10,14 @@ function formatDateTime(value: string | null | undefined): string {
   return new Date(value).toISOString().replace("T", " ").slice(0, 19);
 }
 
+function formatWindow(hours: number): string {
+  if (hours > 0 && hours % 24 === 0) {
+    const days = hours / 24;
+    return days === 1 ? "1 day" : `${days} days`;
+  }
+  return hours === 1 ? "1 hour" : `${hours} hours`;
+}
+
 function urgencyClass(urgency: string): string {
   const lower = urgency.toLowerCase();
   if (lower === "high") return "urgency-pill urgency-high";
@@ -49,7 +57,7 @@ function extractErrorMessage(err: unknown, fallback: string): string {
 export default function Dashboard() {
   const navigate = useNavigate();
   const [items, setItems] = useState<AssistantFeedItem[]>([]);
-  const [windowHours, setWindowHours] = useState(48);
+  const [windowHours, setWindowHours] = useState(120);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -107,8 +115,8 @@ export default function Dashboard() {
         <div>
           <h1>What needs your attention</h1>
           <p className="muted-paragraph">
-            Last {windowHours} hours of TACREP_NOTSOs, evaluated against your uploaded procedures.
-            Most urgent first.
+            Last {formatWindow(windowHours)} of TACREP_NOTSOs, evaluated against your uploaded
+            procedures. Most urgent first.
             {lastLoadedAt && (
               <>
                 {" "}
@@ -153,8 +161,8 @@ export default function Dashboard() {
       {items.length === 0 ? (
         <section className="card">
           <p>
-            No NOTSOs in the last {windowHours} hours. When new ones arrive they'll appear here
-            automatically.
+            No NOTSOs in the last {formatWindow(windowHours)}. When new ones arrive they'll appear
+            here automatically.
           </p>
         </section>
       ) : (
