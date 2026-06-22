@@ -1,6 +1,6 @@
 import { FormEvent, useState } from "react";
 import { useEventTimers } from "../context/EventTimersContext";
-import type { EventTimer } from "../types";
+import type { EventTimer, TimerRecurrence } from "../types";
 
 function toIsoUtc(local: string): string {
   // datetime-local fields hand back values in the operator's local zone
@@ -65,6 +65,11 @@ function TimerRow({ timer, variant }: TimerRowProps) {
         {variant === "pre" && <span className="urgency-pill urgency-medium">5-min alert</span>}
         {variant === "firing" && <span className="urgency-pill urgency-high">Firing</span>}
         {variant === "dismissed" && <span className="muted">Dismissed</span>}
+        {timer.recurrence && timer.recurrence !== "none" && (
+          <span className="recurrence-pill">
+            {timer.recurrence.charAt(0).toUpperCase() + timer.recurrence.slice(1)}
+          </span>
+        )}
         {timer.event_key && <span className="muted">event {timer.event_key}</span>}
       </div>
       <div className="event-timer-actions">
@@ -87,6 +92,7 @@ export default function EventTimersPanel() {
   const [eventKey, setEventKey] = useState("");
   const [targetTime, setTargetTime] = useState("");
   const [preMinutes, setPreMinutes] = useState("5");
+  const [recurrence, setRecurrence] = useState<TimerRecurrence>("none");
   const [submitting, setSubmitting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
@@ -101,11 +107,13 @@ export default function EventTimersPanel() {
         target_time: toIsoUtc(targetTime),
         event_key: eventKey.trim() || null,
         pre_alert_minutes: Math.max(0, Number(preMinutes) || 0),
+        recurrence,
       });
       setLabel("");
       setEventKey("");
       setTargetTime("");
       setPreMinutes("5");
+      setRecurrence("none");
     } catch (err) {
       setCreateError(err instanceof Error ? err.message : "Could not create timer.");
     } finally {
@@ -161,6 +169,18 @@ export default function EventTimersPanel() {
             max="720"
             onChange={(e) => setPreMinutes(e.target.value)}
           />
+        </label>
+        <label>
+          Recurrence
+          <select
+            value={recurrence}
+            onChange={(e) => setRecurrence(e.target.value as TimerRecurrence)}
+          >
+            <option value="none">One-off</option>
+            <option value="daily">Daily</option>
+            <option value="weekly">Weekly</option>
+            <option value="monthly">Monthly</option>
+          </select>
         </label>
         <button type="submit" disabled={submitting || !label.trim() || !targetTime}>
           {submitting ? "Adding..." : "Add timer"}

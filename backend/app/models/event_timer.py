@@ -36,6 +36,10 @@ class EventTimer(Base, TimestampMixin):
     label: Mapped[str] = mapped_column(String(200), nullable=False)
     target_time: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
     pre_alert_minutes: Mapped[int] = mapped_column(Integer, nullable=False, default=5)
+    # "none" | "daily" | "weekly" | "monthly". Recurring timers roll
+    # forward to the next occurrence when dismissed instead of going
+    # permanently dismissed.
+    recurrence: Mapped[str] = mapped_column(String(20), nullable=False, default="none")
 
     pre_alert_fired_at: Mapped[Optional[datetime]] = mapped_column(
         DateTime(timezone=True), nullable=True

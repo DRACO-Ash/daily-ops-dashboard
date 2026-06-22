@@ -2,6 +2,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Optional
 from uuid import UUID
 
+from dateutil.relativedelta import relativedelta  # type: ignore[import-untyped]
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -12,6 +13,33 @@ from app.models.event_timer import EventTimer
 from app.models.user import User
 from app.schemas.event_timer import EventTimerCreate, EventTimerList, EventTimerRead
 from app.services.audit import write_audit
+
+
+def _advance(target: datetime, recurrence: str) -> datetime:
+    if recurrence == "daily":
+        return target + timedelta(days=1)
+    if recurrence == "weekly":
+        return target + timedelta(days=7)
+    if recurrence == "monthly":
+        # relativedelta handles month-end edge cases: Jan 31 + 1 month
+        # lands on Feb 28/29 rather than overflowing.
+        return target + relativedelta(months=1)
+    return target
+
+
+def _next_future_occurrence(target: datetime, recurrence: str) -> datetime:
+    """Advance `target` by `recurrence` repeatedly until it's in the future.
+
+    Handles the case where the operator dismisses long after the alarm
+    started firing (a daily timer at 0900 dismissed at 1100 next morning
+    should roll to the day after, not just bump to the past time again).
+    """
+    now = datetime.now(timezone.utc)
+    nxt = _advance(target, recurrence)
+    while nxt <= now:
+        nxt = _advance(nxt, recurrence)
+    return nxt
+
 
 router = APIRouter(prefix="/event-timers", tags=["event-timers"])
 
@@ -56,6 +84,7 @@ async def create_timer(
         label=payload.label.strip(),
         target_time=target,
         pre_alert_minutes=payload.pre_alert_minutes,
+        recurrence=payload.recurrence,
         shift_date=payload.shift_date,
         created_by=current_user.id,
     )
@@ -75,6 +104,7 @@ async def create_timer(
             "event_key": timer.event_key,
             "target_time": timer.target_time.isoformat(),
             "pre_alert_minutes": timer.pre_alert_minutes,
+            "recurrence": timer.recurrence,
         },
     )
     await db.commit()
@@ -127,21 +157,48 @@ async def dismiss_timer(
     timer = await _load_timer(db, timer_id)
     if timer.dismissed_at is None:
         now = datetime.now(timezone.utc)
-        timer.dismissed_at = now
-        timer.dismissed_by = current_user.id
-        if timer.pre_alert_fired_at is None:
-            timer.pre_alert_fired_at = now
-        await db.flush()
         ip = request.client.host if request.client else None
-        await write_audit(
-            db,
-            action_type="event_timer.dismiss",
-            entity_type="event_timer",
-            entity_id=str(timer.id),
-            user_id=current_user.id,
-            ip_address=ip,
-            detail={"label": timer.label, "target_time": timer.target_time.isoformat()},
-        )
+        if timer.recurrence != "none":
+            # Recurring: roll forward to the next occurrence. The
+            # timer stays "active" — dismissed_at is not set, the
+            # pre-alert flag clears so the next-occurrence pre-alert
+            # fires fresh.
+            previous_target = timer.target_time
+            timer.target_time = _next_future_occurrence(timer.target_time, timer.recurrence)
+            timer.pre_alert_fired_at = None
+            await db.flush()
+            await write_audit(
+                db,
+                action_type="event_timer.roll_forward",
+                entity_type="event_timer",
+                entity_id=str(timer.id),
+                user_id=current_user.id,
+                ip_address=ip,
+                detail={
+                    "label": timer.label,
+                    "recurrence": timer.recurrence,
+                    "previous_target": previous_target.isoformat(),
+                    "next_target": timer.target_time.isoformat(),
+                },
+            )
+        else:
+            timer.dismissed_at = now
+            timer.dismissed_by = current_user.id
+            if timer.pre_alert_fired_at is None:
+                timer.pre_alert_fired_at = now
+            await db.flush()
+            await write_audit(
+                db,
+                action_type="event_timer.dismiss",
+                entity_type="event_timer",
+                entity_id=str(timer.id),
+                user_id=current_user.id,
+                ip_address=ip,
+                detail={
+                    "label": timer.label,
+                    "target_time": timer.target_time.isoformat(),
+                },
+            )
         await db.commit()
         await db.refresh(timer)
     return EventTimerRead.model_validate(timer)

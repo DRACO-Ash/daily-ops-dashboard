@@ -1,8 +1,10 @@
 from datetime import date, datetime
-from typing import Optional
+from typing import Literal, Optional
 from uuid import UUID
 
 from pydantic import BaseModel, ConfigDict, Field
+
+Recurrence = Literal["none", "daily", "weekly", "monthly"]
 
 
 class EventTimerCreate(BaseModel):
@@ -10,6 +12,7 @@ class EventTimerCreate(BaseModel):
     target_time: datetime
     event_key: Optional[str] = Field(default=None, max_length=200)
     pre_alert_minutes: int = Field(default=5, ge=0, le=720)
+    recurrence: Recurrence = "none"
     shift_date: Optional[date] = None
 
 
@@ -21,6 +24,7 @@ class EventTimerRead(BaseModel):
     label: str
     target_time: datetime
     pre_alert_minutes: int
+    recurrence: str
     pre_alert_fired_at: Optional[datetime] = None
     dismissed_at: Optional[datetime] = None
     dismissed_by: Optional[UUID] = None
