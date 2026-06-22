@@ -6,6 +6,7 @@ import AuditLog from "./pages/AuditLog";
 import Dashboard from "./pages/Dashboard";
 import Login from "./pages/Login";
 import Maneuvers from "./pages/Maneuvers";
+import Mattermost from "./pages/Mattermost";
 import Notifications from "./pages/Notifications";
 import NotificationDetail from "./pages/NotificationDetail";
 import Procedures from "./pages/Procedures";
@@ -28,6 +29,7 @@ export default function App() {
             <Route path="/notifications" element={<Notifications />} />
             <Route path="/notifications/:id" element={<NotificationDetail />} />
             <Route path="/maneuvers" element={<Maneuvers />} />
+            <Route path="/comms" element={<Mattermost />} />
             <Route path="/procedures" element={<Procedures />} />
             <Route path="/shift-log" element={<ShiftLog />} />
             <Route path="/audit" element={<AuditLog />} />

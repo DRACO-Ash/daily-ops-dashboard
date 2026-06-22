@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import settings
 from app.models.assistant_evaluation import AssistantEvaluation
 from app.models.maneuver import Maneuver
+from app.models.mattermost_message import MattermostMessage
 from app.models.notification import Notification
 from app.models.procedure import Procedure
 from app.services.procedure_storage import read_preview
@@ -33,13 +34,19 @@ _SYSTEM_PROMPT = """\
 You are an expert space operations analyst supporting a Daily Space
 Operations team. You assist the operator by reading UDL notifications
 (NOTSOs / TACREPs) alongside related maneuver records from fusion
-providers and the team's own uploaded operational procedures, then
-recommending concrete next steps.
+providers, recent team chat from Mattermost, and the team's own
+uploaded operational procedures, then recommending concrete next
+steps.
 
 Maneuver records describe historical or in-progress thrust events for
 the same satellites referenced in the notification. Use them to spot
 patterns (e.g. recent maneuver may explain a new conjunction) and to
 contextualise the notification.
+
+The TEAM CHAT section is recent shop-talk from the ops floor. Treat
+it as soft context — useful for spotting decisions the team has
+already made, escalations in flight, or open threads — not as
+authoritative source data. Operators may speculate or revise.
 
 You must respond with a single JSON object and nothing else. No prose
 before or after the JSON. Use this schema exactly:
@@ -180,6 +187,48 @@ async def _load_relevant_maneuvers(db: AsyncSession, notification: Notification)
     return list((await db.execute(stmt)).scalars().all())
 
 
+async def _load_recent_chat(db: AsyncSession) -> list[MattermostMessage]:
+    """Pull the most-recent chat from configured Mattermost channels.
+
+    Returned ascending by posted_at so the formatted block reads
+    chronologically (oldest first, newest at the bottom — same flow
+    the operator would see in chat).
+    """
+    window_hours = settings.mattermost_prompt_window_hours
+    limit = settings.mattermost_max_messages_in_prompt
+    if window_hours <= 0 or limit <= 0:
+        return []
+    window_start = datetime.now(timezone.utc) - timedelta(hours=window_hours)
+    # Fetch the latest `limit` messages within the window, then reverse
+    # for chronological display.
+    stmt = (
+        select(MattermostMessage)
+        .where(MattermostMessage.posted_at >= window_start)
+        .order_by(MattermostMessage.posted_at.desc())
+        .limit(limit)
+    )
+    rows = list((await db.execute(stmt)).scalars().all())
+    rows.reverse()
+    return rows
+
+
+def _format_chat(messages: list[MattermostMessage]) -> str:
+    if not messages:
+        return ""
+    lines = [
+        f"TEAM CHAT (last {settings.mattermost_prompt_window_hours} hours):",
+    ]
+    for m in messages:
+        ts = m.posted_at.strftime("%Y-%m-%d %H:%M")
+        author = m.user_display_name or m.user_id
+        channel = m.channel_name or m.channel_id
+        body = m.message.replace("\n", " ").strip()
+        if len(body) > 500:
+            body = body[:500] + "..."
+        lines.append(f"- [{ts}] #{channel} @{author}: {body}")
+    return "\n".join(lines)
+
+
 def _format_procedure(p: Procedure) -> str:
     content, truncated = read_preview(p.id, p.filename, p.content_type)
     block = [
@@ -201,6 +250,7 @@ def _build_user_message(
     notification: Notification,
     procedures: list[Procedure],
     maneuvers: list[Maneuver],
+    chat: list[MattermostMessage],
 ) -> str:
     parts = [_format_notification(notification), ""]
     if maneuvers:
@@ -209,6 +259,9 @@ def _build_user_message(
         parts.append("\n".join(lines))
     else:
         parts.append("RELATED MANEUVERS: (none for the satellite(s) in this notification)")
+    chat_block = _format_chat(chat)
+    if chat_block:
+        parts.append(chat_block)
     if procedures:
         parts.append("AVAILABLE PROCEDURES:")
         parts.extend(_format_procedure(p) for p in procedures)
@@ -336,8 +389,9 @@ async def evaluate_notification(
         (await db.execute(select(Procedure).order_by(Procedure.created_at))).scalars().all()
     )
     maneuvers = await _load_relevant_maneuvers(db, notification)
+    chat = await _load_recent_chat(db)
 
-    user_message = _build_user_message(notification, list(procedures), maneuvers)
+    user_message = _build_user_message(notification, list(procedures), maneuvers, chat)
 
     error: Optional[str] = None
     structured: dict[str, Any]

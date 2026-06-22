@@ -11,6 +11,7 @@ from app.models import (  # noqa: F401  ensure models are registered on Base.met
     event_summary,
     event_timer,
     maneuver,
+    mattermost_message,
     notification,
     procedure,
     revoked_jti,

@@ -1,19 +1,22 @@
 """Per-surface background refresh loops.
 
-Two independent asyncio tasks, each managing one UDL surface with
-its own cadence and window:
+Three independent asyncio tasks, each managing one external surface
+with its own cadence:
 
-● notifications — hourly, 5-day window. After each pull, runs the
-  auto-evaluate phase (per-notification Claude analysis) and the
-  event-summary phase (3-sentence evolution narrative per logical
-  event).
-● maneuvers — every 10 minutes, 48h window. Pull only.
+● notifications — hourly, 5-day window from UDL. After each pull,
+  runs the auto-evaluate phase (per-notification Claude analysis)
+  and the event-summary phase (3-sentence evolution narrative per
+  logical event).
+● maneuvers — every 10 minutes, 48h window from UDL. Pull only.
+● mattermost — every 60 seconds from configured chat channels.
+  Pull only; messages flow into the assistant prompt at evaluation
+  time alongside notifications and maneuvers.
 
 Elset auto-pulling was removed because the operator wasn't using
 the data; the backend route/model/table remain for recoverability.
 
 Each loop opens its own AsyncSession per phase and swallows
-exceptions so a transient UDL or model outage never kills it.
+exceptions so a transient outage never kills it.
 """
 
 import asyncio
@@ -31,6 +34,7 @@ from app.models.notification import Notification
 from app.services.assistant import evaluate_notification, is_persistent_anthropic_failure
 from app.services.event_summary import compute_event_key, generate_event_summary
 from app.services.maneuver_ingest import ingest_maneuvers
+from app.services.mattermost_ingest import ingest_mattermost_messages
 from app.services.notification_ingest import ingest_notifications
 from app.services.notification_query import aliased_deduped_notifications
 from app.services.udl_client import UDLAuthError, UDLClient, UDLClientError
@@ -194,6 +198,18 @@ async def _notification_cycle() -> None:
     await _event_summary_phase()
 
 
+# Mattermost ------------------------------------------------------
+
+
+async def _pull_mattermost_once() -> None:
+    factory = get_session_factory()
+    try:
+        async with factory() as db:
+            await ingest_mattermost_messages(db)
+    except Exception:
+        logger.exception("Mattermost ingest crashed unexpectedly")
+
+
 # Maneuvers ------------------------------------------------------
 
 
@@ -254,6 +270,14 @@ def maneuver_loop():
         "maneuvers",
         _pull_maneuvers_once,
         settings.background_maneuver_interval_seconds,
+    )()
+
+
+def mattermost_loop():
+    return _make_loop(
+        "mattermost",
+        _pull_mattermost_once,
+        settings.mattermost_interval_seconds,
     )()
 
 

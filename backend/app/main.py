@@ -13,6 +13,7 @@ from app.api.v1.routes import (
     event_timers,
     health,
     maneuvers,
+    mattermost,
     notifications,
     procedures,
     shift_log,
@@ -20,7 +21,11 @@ from app.api.v1.routes import (
 from app.config import settings
 from app.core.logging import configure_logging
 from app.core.request_id import REQUEST_ID_HEADER, RequestIDMiddleware
-from app.services.background_refresh import maneuver_loop, notification_loop
+from app.services.background_refresh import (
+    maneuver_loop,
+    mattermost_loop,
+    notification_loop,
+)
 
 configure_logging()
 
@@ -33,6 +38,7 @@ async def lifespan(_app: FastAPI):
     if settings.background_refresh_enabled:
         tasks.append(asyncio.create_task(notification_loop()))
         tasks.append(asyncio.create_task(maneuver_loop()))
+        tasks.append(asyncio.create_task(mattermost_loop()))
     try:
         yield
     finally:
@@ -71,6 +77,7 @@ app.include_router(auth.router, prefix="/api/v1")
 app.include_router(elsets.router, prefix="/api/v1")
 app.include_router(notifications.router, prefix="/api/v1")
 app.include_router(maneuvers.router, prefix="/api/v1")
+app.include_router(mattermost.router, prefix="/api/v1")
 app.include_router(procedures.router, prefix="/api/v1")
 app.include_router(shift_log.router, prefix="/api/v1")
 app.include_router(event_timers.router, prefix="/api/v1")

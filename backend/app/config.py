@@ -29,6 +29,13 @@ class Settings(BaseSettings):
     mattermost_bot_token: str = ""
     mattermost_team_id: str = ""
     mattermost_poll_interval: int = 60
+    # Comma-separated list of Mattermost channel IDs to poll. Channels
+    # the bot account isn't a member of are silently skipped (Mattermost
+    # rejects the GET with a 403).
+    mattermost_channel_ids: str = ""
+    mattermost_interval_seconds: int = 60
+    mattermost_prompt_window_hours: int = 6
+    mattermost_max_messages_in_prompt: int = 30
 
     udl_base_url: str = "https://unifieddatalibrary.com/udl"
     udl_username: str = ""
