@@ -1,14 +1,16 @@
 """Per-surface background refresh loops.
 
-Three independent asyncio tasks, each managing one UDL surface with
+Two independent asyncio tasks, each managing one UDL surface with
 its own cadence and window:
 
 ● notifications — hourly, 5-day window. After each pull, runs the
   auto-evaluate phase (per-notification Claude analysis) and the
   event-summary phase (3-sentence evolution narrative per logical
   event).
-● elsets — every 10 minutes, 48h window. Pull only.
 ● maneuvers — every 10 minutes, 48h window. Pull only.
+
+Elset auto-pulling was removed because the operator wasn't using
+the data; the backend route/model/table remain for recoverability.
 
 Each loop opens its own AsyncSession per phase and swallows
 exceptions so a transient UDL or model outage never kills it.
@@ -27,7 +29,6 @@ from app.models.assistant_evaluation import AssistantEvaluation
 from app.models.event_summary import EventSummary
 from app.models.notification import Notification
 from app.services.assistant import evaluate_notification, is_persistent_anthropic_failure
-from app.services.elset_ingest import ingest_elsets
 from app.services.event_summary import compute_event_key, generate_event_summary
 from app.services.maneuver_ingest import ingest_maneuvers
 from app.services.notification_ingest import ingest_notifications
@@ -193,31 +194,6 @@ async def _notification_cycle() -> None:
     await _event_summary_phase()
 
 
-# Elsets ---------------------------------------------------------
-
-
-async def _pull_elsets_once() -> None:
-    window_hours = settings.background_elset_window_hours
-    window_start = datetime.now(timezone.utc) - timedelta(hours=window_hours)
-    factory = get_session_factory()
-    try:
-        async with UDLClient() as client:
-            async with factory() as db:
-                await ingest_elsets(
-                    db,
-                    client=client,
-                    epoch_gte=window_start,
-                    data_mode="REAL",
-                )
-        logger.info("Elset ingest complete (window: last %sh)", window_hours)
-    except UDLAuthError as exc:
-        logger.warning("Elset ingest skipped: UDL auth failed (%s)", exc)
-    except UDLClientError as exc:
-        logger.warning("Elset ingest failed: %s", exc)
-    except Exception:
-        logger.exception("Elset ingest crashed unexpectedly")
-
-
 # Maneuvers ------------------------------------------------------
 
 
@@ -270,14 +246,6 @@ def notification_loop():
         "notifications",
         _notification_cycle,
         settings.background_notification_interval_seconds,
-    )()
-
-
-def elset_loop():
-    return _make_loop(
-        "elsets",
-        _pull_elsets_once,
-        settings.background_elset_interval_seconds,
     )()
 
 

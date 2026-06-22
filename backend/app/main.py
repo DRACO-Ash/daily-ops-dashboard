@@ -20,7 +20,7 @@ from app.api.v1.routes import (
 from app.config import settings
 from app.core.logging import configure_logging
 from app.core.request_id import REQUEST_ID_HEADER, RequestIDMiddleware
-from app.services.background_refresh import elset_loop, maneuver_loop, notification_loop
+from app.services.background_refresh import maneuver_loop, notification_loop
 
 configure_logging()
 
@@ -32,7 +32,6 @@ async def lifespan(_app: FastAPI):
     tasks: list[asyncio.Task] = []
     if settings.background_refresh_enabled:
         tasks.append(asyncio.create_task(notification_loop()))
-        tasks.append(asyncio.create_task(elset_loop()))
         tasks.append(asyncio.create_task(maneuver_loop()))
     try:
         yield

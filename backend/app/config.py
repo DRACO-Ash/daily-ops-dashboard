@@ -53,8 +53,6 @@ class Settings(BaseSettings):
     # 10-minute cycle.
     background_notification_interval_seconds: int = 3600
     background_notification_window_hours: int = 120
-    background_elset_interval_seconds: int = 600
-    background_elset_window_hours: int = 48
     background_maneuver_interval_seconds: int = 600
     background_maneuver_window_hours: int = 48
 
