@@ -1182,6 +1182,41 @@ button:disabled {
   color: var(--color-accent);
 }
 
+.event-timers-toggle {
+  display: flex;
+  align-items: baseline;
+  gap: var(--space-3);
+  width: 100%;
+  background: transparent;
+  border: none;
+  padding: 0 0 var(--space-3);
+  cursor: pointer;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+}
+
+.event-timers-toggle:hover {
+  background: transparent;
+}
+
+.event-timers-toggle h2 {
+  margin: 0;
+  color: var(--color-accent);
+}
+
+.event-timers-chevron {
+  display: inline-block;
+  width: 14px;
+  color: var(--color-accent);
+  font-size: 0.85rem;
+  line-height: 1;
+}
+
+.event-timers-counts {
+  margin-left: auto;
+}
+
 .event-timer-form {
   margin-bottom: var(--space-3);
 }

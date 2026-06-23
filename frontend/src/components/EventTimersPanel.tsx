@@ -2,6 +2,18 @@ import { FormEvent, useState } from "react";
 import { useEventTimers } from "../context/EventTimersContext";
 import type { EventTimer, TimerRecurrence } from "../types";
 
+const COLLAPSE_STORAGE_KEY = "ops-dashboard.event-timers.collapsed";
+
+function loadCollapsed(): boolean {
+  if (typeof window === "undefined") return false;
+  return window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === "1";
+}
+
+function saveCollapsed(value: boolean): void {
+  if (typeof window === "undefined") return;
+  window.localStorage.setItem(COLLAPSE_STORAGE_KEY, value ? "1" : "0");
+}
+
 function toIsoUtc(local: string): string {
   // datetime-local fields hand back values in the operator's local zone
   // with no offset. The backend expects UTC ISO, so convert.
@@ -95,6 +107,13 @@ export default function EventTimersPanel() {
   const [recurrence, setRecurrence] = useState<TimerRecurrence>("none");
   const [submitting, setSubmitting] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
+  const [collapsed, setCollapsed] = useState<boolean>(loadCollapsed);
+
+  function toggleCollapsed() {
+    const next = !collapsed;
+    setCollapsed(next);
+    saveCollapsed(next);
+  }
 
   async function onSubmit(e: FormEvent) {
     e.preventDefault();
@@ -123,91 +142,103 @@ export default function EventTimersPanel() {
 
   return (
     <section className="card event-timers-card">
-      <div className="event-timers-head">
+      <button
+        type="button"
+        className="event-timers-toggle"
+        onClick={toggleCollapsed}
+        aria-expanded={!collapsed}
+      >
+        <span className="event-timers-chevron" aria-hidden="true">
+          {collapsed ? "▸" : "▾"}
+        </span>
         <h2>Event timers</h2>
-        <span className="muted">
+        <span className="muted event-timers-counts">
           {firing.length} firing &middot; {preAlerting.length} pre-alert &middot; {upcoming.length}{" "}
           upcoming
         </span>
-      </div>
+      </button>
 
-      <form onSubmit={onSubmit} className="filter-form event-timer-form">
-        <label>
-          Label
-          <input
-            type="text"
-            value={label}
-            onChange={(e) => setLabel(e.target.value)}
-            placeholder="e.g. ISS station-keeping burn"
-            required
-          />
-        </label>
-        <label>
-          Event ID (optional)
-          <input
-            type="text"
-            value={eventKey}
-            onChange={(e) => setEventKey(e.target.value)}
-            placeholder="event_id or NOTSO number"
-          />
-        </label>
-        <label>
-          Target time (local)
-          <input
-            type="datetime-local"
-            value={targetTime}
-            onChange={(e) => setTargetTime(e.target.value)}
-            required
-          />
-        </label>
-        <label>
-          Pre-alert (min)
-          <input
-            type="number"
-            value={preMinutes}
-            min="0"
-            max="720"
-            onChange={(e) => setPreMinutes(e.target.value)}
-          />
-        </label>
-        <label>
-          Recurrence
-          <select
-            value={recurrence}
-            onChange={(e) => setRecurrence(e.target.value as TimerRecurrence)}
-          >
-            <option value="none">One-off</option>
-            <option value="daily">Daily</option>
-            <option value="weekly">Weekly</option>
-            <option value="monthly">Monthly</option>
-          </select>
-        </label>
-        <button type="submit" disabled={submitting || !label.trim() || !targetTime}>
-          {submitting ? "Adding..." : "Add timer"}
-        </button>
-      </form>
+      {collapsed ? null : (
+        <>
+          <form onSubmit={onSubmit} className="filter-form event-timer-form">
+            <label>
+              Label
+              <input
+                type="text"
+                value={label}
+                onChange={(e) => setLabel(e.target.value)}
+                placeholder="e.g. ISS station-keeping burn"
+                required
+              />
+            </label>
+            <label>
+              Event ID (optional)
+              <input
+                type="text"
+                value={eventKey}
+                onChange={(e) => setEventKey(e.target.value)}
+                placeholder="event_id or NOTSO number"
+              />
+            </label>
+            <label>
+              Target time (local)
+              <input
+                type="datetime-local"
+                value={targetTime}
+                onChange={(e) => setTargetTime(e.target.value)}
+                required
+              />
+            </label>
+            <label>
+              Pre-alert (min)
+              <input
+                type="number"
+                value={preMinutes}
+                min="0"
+                max="720"
+                onChange={(e) => setPreMinutes(e.target.value)}
+              />
+            </label>
+            <label>
+              Recurrence
+              <select
+                value={recurrence}
+                onChange={(e) => setRecurrence(e.target.value as TimerRecurrence)}
+              >
+                <option value="none">One-off</option>
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="monthly">Monthly</option>
+              </select>
+            </label>
+            <button type="submit" disabled={submitting || !label.trim() || !targetTime}>
+              {submitting ? "Adding..." : "Add timer"}
+            </button>
+          </form>
 
-      {(error || createError) && <div className="form-error">{createError ?? error}</div>}
+          {(error || createError) && <div className="form-error">{createError ?? error}</div>}
 
-      {firing.length === 0 &&
-        preAlerting.length === 0 &&
-        upcoming.length === 0 &&
-        dismissed.length === 0 && <p className="muted">No timers set.</p>}
+          {firing.length === 0 &&
+            preAlerting.length === 0 &&
+            upcoming.length === 0 &&
+            dismissed.length === 0 && <p className="muted">No timers set.</p>}
 
-      <ul className="event-timers-list">
-        {firing.map((t) => (
-          <TimerRow key={t.id} timer={t} variant="firing" />
-        ))}
-        {preAlerting.map((t) => (
-          <TimerRow key={t.id} timer={t} variant="pre" />
-        ))}
-        {upcoming.map((t) => (
-          <TimerRow key={t.id} timer={t} variant="upcoming" />
-        ))}
-        {dismissed.map((t) => (
-          <TimerRow key={t.id} timer={t} variant="dismissed" />
-        ))}
-      </ul>
+          <ul className="event-timers-list">
+            {firing.map((t) => (
+              <TimerRow key={t.id} timer={t} variant="firing" />
+            ))}
+            {preAlerting.map((t) => (
+              <TimerRow key={t.id} timer={t} variant="pre" />
+            ))}
+            {upcoming.map((t) => (
+              <TimerRow key={t.id} timer={t} variant="upcoming" />
+            ))}
+            {dismissed.map((t) => (
+              <TimerRow key={t.id} timer={t} variant="dismissed" />
+            ))}
+          </ul>
+        </>
+      )}
     </section>
   );
 }
