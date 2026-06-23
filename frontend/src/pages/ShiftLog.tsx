@@ -4,13 +4,14 @@ import {
   deleteShiftNote,
   generateShiftSummary,
   getShiftSummary,
+  listShiftDates,
   listShiftNotes,
   repolishShiftNote,
   shiftExportUrl,
   updateShiftNote,
 } from "../api/shift";
 import EventTimersPanel from "../components/EventTimersPanel";
-import type { ShiftNote, ShiftSummary } from "../types";
+import type { ShiftDateSummary, ShiftNote, ShiftSummary } from "../types";
 
 function todayUtcIso(): string {
   return new Date().toISOString().slice(0, 10);
@@ -146,6 +147,22 @@ function NoteRow({ note, onSaved, onDeleted, onError }: NoteRowProps) {
   );
 }
 
+function formatShiftDateLabel(iso: string): string {
+  const today = todayUtcIso();
+  if (iso === today) return "Today";
+  const yesterday = new Date(Date.now() - 24 * 3_600_000).toISOString().slice(0, 10);
+  if (iso === yesterday) return "Yesterday";
+  // Render a short date label for further-back shifts so the operator
+  // doesn't have to mentally translate ISO strings.
+  const d = new Date(iso + "T00:00:00Z");
+  return d.toLocaleDateString(undefined, {
+    weekday: "short",
+    month: "short",
+    day: "numeric",
+    timeZone: "UTC",
+  });
+}
+
 export default function ShiftLogPage() {
   const [shiftDate, setShiftDate] = useState<string>(todayUtcIso());
   const [notes, setNotes] = useState<ShiftNote[]>([]);
@@ -156,6 +173,17 @@ export default function ShiftLogPage() {
   const [draft, setDraft] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [generating, setGenerating] = useState(false);
+
+  const [recentDates, setRecentDates] = useState<ShiftDateSummary[]>([]);
+
+  const refreshRecentDates = useCallback(async () => {
+    try {
+      const data = await listShiftDates(30);
+      setRecentDates(data.items);
+    } catch {
+      // Non-fatal; recent-dates panel is a nice-to-have.
+    }
+  }, []);
 
   const load = useCallback(async (date: string) => {
     setLoading(true);
@@ -175,6 +203,10 @@ export default function ShiftLogPage() {
     load(shiftDate);
   }, [shiftDate, load]);
 
+  useEffect(() => {
+    void refreshRecentDates();
+  }, [refreshRecentDates]);
+
   async function onSubmit(event: FormEvent) {
     event.preventDefault();
     const text = draft.trim();
@@ -185,6 +217,7 @@ export default function ShiftLogPage() {
       const created = await createShiftNote(text, shiftDate);
       setNotes((prev) => [...prev, created]);
       setDraft("");
+      void refreshRecentDates();
     } catch (err) {
       setError(extractErrorMessage(err, "Failed to save note."));
     } finally {
@@ -198,6 +231,7 @@ export default function ShiftLogPage() {
     try {
       const result = await generateShiftSummary(shiftDate);
       setSummary(result);
+      void refreshRecentDates();
     } catch (err) {
       setError(extractErrorMessage(err, "Failed to generate summary."));
     } finally {
@@ -211,6 +245,7 @@ export default function ShiftLogPage() {
 
   function onNoteDeleted(id: string) {
     setNotes((prev) => prev.filter((n) => n.id !== id));
+    void refreshRecentDates();
   }
 
   const hasNotes = notes.length > 0;
@@ -244,6 +279,34 @@ export default function ShiftLogPage() {
       </div>
 
       {error && <div className="form-error">{error}</div>}
+
+      {recentDates.length > 0 && (
+        <section className="card shift-recent">
+          <h2>Recent shifts</h2>
+          <div className="shift-recent-list">
+            {recentDates.map((entry) => {
+              const active = entry.shift_date === shiftDate;
+              return (
+                <button
+                  key={entry.shift_date}
+                  type="button"
+                  className={`shift-recent-pill${active ? " active" : ""}`}
+                  onClick={() => setShiftDate(entry.shift_date)}
+                  title={entry.shift_date}
+                >
+                  <span className="shift-recent-label">
+                    {formatShiftDateLabel(entry.shift_date)}
+                  </span>
+                  <span className="shift-recent-count">
+                    {entry.note_count} {entry.note_count === 1 ? "entry" : "entries"}
+                  </span>
+                  {entry.has_summary && <span className="shift-recent-summary">summary</span>}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      )}
 
       <EventTimersPanel />
 

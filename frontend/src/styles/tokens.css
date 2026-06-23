@@ -1326,6 +1326,64 @@ button:disabled {
   line-height: 1.5;
 }
 
+/* Recent shifts pills ------------------------------------------ */
+
+.shift-recent-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.shift-recent-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 12px;
+  border-radius: 16px;
+  background: var(--color-bg);
+  border: 1px solid var(--color-border-strong);
+  color: var(--color-text);
+  font-size: 0.82rem;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.shift-recent-pill:hover {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: var(--color-bg);
+}
+
+.shift-recent-pill.active {
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+  background: rgba(122, 167, 224, 0.1);
+}
+
+.shift-recent-label {
+  font-weight: 500;
+}
+
+.shift-recent-count {
+  color: var(--color-text-muted);
+  font-size: 0.75rem;
+}
+
+.shift-recent-pill.active .shift-recent-count {
+  color: var(--color-accent);
+}
+
+.shift-recent-summary {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 1px 6px;
+  border-radius: 8px;
+  background: rgba(79, 191, 142, 0.15);
+  color: var(--color-success);
+  border: 1px solid rgba(79, 191, 142, 0.3);
+}
+
 /* Scrollbar tweaks for the dark theme --------------------------- */
 
 ::-webkit-scrollbar {

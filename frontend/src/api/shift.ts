@@ -1,5 +1,18 @@
 import { apiClient } from "./client";
-import type { ShiftExportFormat, ShiftNote, ShiftNoteList, ShiftSummary } from "../types";
+import type {
+  ShiftDateList,
+  ShiftExportFormat,
+  ShiftNote,
+  ShiftNoteList,
+  ShiftSummary,
+} from "../types";
+
+export async function listShiftDates(days = 30): Promise<ShiftDateList> {
+  const { data } = await apiClient.get<ShiftDateList>("/shift-log/dates", {
+    params: { days },
+  });
+  return data;
+}
 
 export async function listShiftNotes(shiftDate?: string): Promise<ShiftNoteList> {
   const { data } = await apiClient.get<ShiftNoteList>("/shift-log/notes", {

@@ -45,3 +45,15 @@ class ShiftSummaryRead(BaseModel):
     error: Optional[str] = None
     created_at: datetime
     updated_at: datetime
+
+
+class ShiftDateSummary(BaseModel):
+    """A shift date that has at least one note logged against it."""
+
+    shift_date: date
+    note_count: int
+    has_summary: bool
+
+
+class ShiftDateList(BaseModel):
+    items: list[ShiftDateSummary]

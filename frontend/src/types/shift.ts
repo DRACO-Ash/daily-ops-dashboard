@@ -28,3 +28,13 @@ export interface ShiftSummary {
 }
 
 export type ShiftExportFormat = "md" | "html";
+
+export interface ShiftDateSummary {
+  shift_date: string;
+  note_count: number;
+  has_summary: boolean;
+}
+
+export interface ShiftDateList {
+  items: ShiftDateSummary[];
+}

@@ -1,11 +1,11 @@
 from datetime import date as date_t
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Literal, Optional
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
 from fastapi.responses import PlainTextResponse
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -14,6 +14,8 @@ from app.models.shift_note import ShiftNote
 from app.models.shift_summary import ShiftSummary
 from app.models.user import User
 from app.schemas.shift import (
+    ShiftDateList,
+    ShiftDateSummary,
     ShiftNoteCreate,
     ShiftNoteList,
     ShiftNoteRead,
@@ -28,6 +30,50 @@ router = APIRouter(prefix="/shift-log", tags=["shift-log"])
 
 def _today_utc() -> date_t:
     return datetime.now(timezone.utc).date()
+
+
+# Dates ----------------------------------------------------------
+
+
+@router.get("/dates", response_model=ShiftDateList)
+async def list_shift_dates(
+    days: int = Query(30, ge=1, le=365),
+    db: AsyncSession = Depends(get_db),
+    _current_user: User = Depends(get_current_user),
+) -> ShiftDateList:
+    """List dates in the last `days` that have at least one note, newest first.
+
+    Each entry carries the note count and a flag for whether an
+    end-of-shift summary has been generated, so the operator can pick
+    out the shifts that have content without stepping through the
+    date picker.
+    """
+    cutoff = _today_utc() - timedelta(days=days)
+    counts_stmt = (
+        select(
+            ShiftNote.shift_date.label("shift_date"),
+            func.count(ShiftNote.id).label("note_count"),
+        )
+        .where(ShiftNote.shift_date >= cutoff)
+        .group_by(ShiftNote.shift_date)
+        .order_by(desc(ShiftNote.shift_date))
+    )
+    rows = (await db.execute(counts_stmt)).all()
+
+    summary_dates_stmt = (
+        select(ShiftSummary.shift_date).where(ShiftSummary.shift_date >= cutoff).distinct()
+    )
+    summary_dates = {row[0] for row in (await db.execute(summary_dates_stmt)).all()}
+
+    items = [
+        ShiftDateSummary(
+            shift_date=row.shift_date,
+            note_count=row.note_count,
+            has_summary=row.shift_date in summary_dates,
+        )
+        for row in rows
+    ]
+    return ShiftDateList(items=items)
 
 
 # Notes ----------------------------------------------------------
