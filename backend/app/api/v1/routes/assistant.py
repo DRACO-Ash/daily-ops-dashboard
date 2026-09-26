@@ -59,6 +59,60 @@ def _rollup_urgency(evaluation: AssistantEvaluation | None) -> tuple[str, str | 
     return best, top_action
 
 
+async def _latest_evaluations(
+    db: AsyncSession, notifications: list[Notification]
+) -> dict[UUID, AssistantEvaluation]:
+    eval_stmt = select(AssistantEvaluation).where(
+        AssistantEvaluation.notification_id.in_([n.id for n in notifications])
+    )
+    latest_by_nid: dict[UUID, AssistantEvaluation] = {}
+    for row in (await db.execute(eval_stmt)).scalars().all():
+        existing = latest_by_nid.get(row.notification_id)
+        if existing is None or row.evaluated_at > existing.evaluated_at:
+            latest_by_nid[row.notification_id] = row
+    return latest_by_nid
+
+
+async def _summaries_by_key(db: AsyncSession, keys: list[str]) -> dict[str, EventSummary]:
+    if not keys:
+        return {}
+    rows = (
+        (await db.execute(select(EventSummary).where(EventSummary.event_key.in_(keys))))
+        .scalars()
+        .all()
+    )
+    return {row.event_key: row for row in rows}
+
+
+def _feed_item(
+    notification: Notification,
+    evaluation: Optional[AssistantEvaluation],
+    event_key: str,
+    summary_row: Optional[EventSummary],
+) -> AssistantFeedItem:
+    urgency, top_action = _rollup_urgency(evaluation)
+    narrative = None
+    count = None
+    if summary_row is not None:
+        count = summary_row.publication_count
+        if not summary_row.error:
+            narrative = summary_row.narrative
+    return AssistantFeedItem(
+        notification=NotificationRead.model_validate(notification),
+        evaluation=AssistantEvaluationRead.model_validate(evaluation) if evaluation else None,
+        urgency=urgency,
+        top_action=top_action,
+        event_summary=narrative,
+        event_publication_count=count,
+        event_key=event_key,
+    )
+
+
+def _feed_sort_key(item: AssistantFeedItem) -> tuple[int, datetime]:
+    created = item.notification.udl_created_at or datetime.min.replace(tzinfo=timezone.utc)
+    return _URGENCY_RANK.get(item.urgency, -2), created
+
+
 @router.get("/feed", response_model=AssistantFeed)
 async def feed(
     limit: int = Query(100, ge=1, le=500),
@@ -76,54 +130,20 @@ async def feed(
     if not notifications:
         return AssistantFeed(items=[], window_hours=effective_hours)
 
-    eval_stmt = select(AssistantEvaluation).where(
-        AssistantEvaluation.notification_id.in_([n.id for n in notifications])
-    )
-    latest_by_nid: dict[UUID, AssistantEvaluation] = {}
-    for row in (await db.execute(eval_stmt)).scalars().all():
-        existing = latest_by_nid.get(row.notification_id)
-        if existing is None or row.evaluated_at > existing.evaluated_at:
-            latest_by_nid[row.notification_id] = row
+    latest_by_nid = await _latest_evaluations(db, notifications)
+    event_keys_by_nid = {n.id: compute_event_key(n) for n in notifications}
+    summary_by_key = await _summaries_by_key(db, list(set(event_keys_by_nid.values())))
 
-    event_keys_by_nid: dict[UUID, str] = {n.id: compute_event_key(n) for n in notifications}
-    unique_keys = list({k for k in event_keys_by_nid.values()})
-    summary_by_key: dict[str, EventSummary] = {}
-    if unique_keys:
-        summary_rows = (
-            (await db.execute(select(EventSummary).where(EventSummary.event_key.in_(unique_keys))))
-            .scalars()
-            .all()
+    items = [
+        _feed_item(
+            n,
+            latest_by_nid.get(n.id),
+            event_keys_by_nid[n.id],
+            summary_by_key.get(event_keys_by_nid[n.id]),
         )
-        summary_by_key = {row.event_key: row for row in summary_rows}
-
-    items: list[AssistantFeedItem] = []
-    for n in notifications:
-        ev = latest_by_nid.get(n.id)
-        urgency, top_action = _rollup_urgency(ev)
-        event_key = event_keys_by_nid.get(n.id)
-        summary_row = summary_by_key.get(event_key) if event_key else None
-        items.append(
-            AssistantFeedItem(
-                notification=NotificationRead.model_validate(n),
-                evaluation=AssistantEvaluationRead.model_validate(ev) if ev else None,
-                urgency=urgency,
-                top_action=top_action,
-                event_summary=(
-                    summary_row.narrative if summary_row and not summary_row.error else None
-                ),
-                event_publication_count=(summary_row.publication_count if summary_row else None),
-                event_key=event_key,
-            )
-        )
-
-    items.sort(
-        key=lambda i: (
-            _URGENCY_RANK.get(i.urgency, -2),
-            i.notification.udl_created_at or datetime.min.replace(tzinfo=timezone.utc),
-        ),
-        reverse=True,
-    )
-
+        for n in notifications
+    ]
+    items.sort(key=_feed_sort_key, reverse=True)
     return AssistantFeed(items=items, window_hours=effective_hours)
 
 
@@ -138,8 +158,7 @@ async def get_evaluation(
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND,
             detail=(
-                "No evaluation exists for this notification yet. "
-                "POST to /evaluate to create one."
+                "No evaluation exists for this notification yet. POST to /evaluate to create one."
             ),
         )
     return AssistantEvaluationRead.model_validate(evaluation)

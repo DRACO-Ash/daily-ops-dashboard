@@ -23,6 +23,7 @@ import asyncio
 import logging
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
+from typing import Optional
 
 from sqlalchemy import select
 
@@ -114,6 +115,15 @@ async def _auto_evaluate_phase() -> None:
             return
 
 
+def _summary_is_stale(existing: Optional[EventSummary], pubs: list[Notification]) -> bool:
+    """True if the event has no summary, or its summary predates the
+    latest publication or covers a different number of publications."""
+    if existing is None:
+        return True
+    latest = max(pubs, key=lambda p: p.udl_created_at or p.created_at)
+    return existing.latest_notification_id != latest.id or existing.publication_count != len(pubs)
+
+
 async def _event_summary_phase() -> None:
     """Refresh event-evolution summaries for any logical event whose
     latest publication is newer than its existing summary."""
@@ -158,20 +168,9 @@ async def _event_summary_phase() -> None:
         )
     existing_by_key = {row.event_key: row for row in existing_rows}
 
-    stale_keys: list[str] = []
-    for key, pubs in grouped.items():
-        if not pubs:
-            continue
-        latest = max(pubs, key=lambda p: p.udl_created_at or p.created_at)
-        existing = existing_by_key.get(key)
-        if existing is None:
-            stale_keys.append(key)
-            continue
-        if existing.latest_notification_id != latest.id:
-            stale_keys.append(key)
-            continue
-        if existing.publication_count != len(pubs):
-            stale_keys.append(key)
+    stale_keys = [
+        key for key, pubs in grouped.items() if _summary_is_stale(existing_by_key.get(key), pubs)
+    ]
 
     if not stale_keys:
         return
@@ -179,17 +178,24 @@ async def _event_summary_phase() -> None:
     stale_keys = stale_keys[:limit]
     logger.info("Refreshing %s event summary/summaries", len(stale_keys))
     for key in stale_keys:
-        async with factory() as db:
-            try:
-                summary = await generate_event_summary(db, key, grouped[key])
-                await db.commit()
-            except Exception:
-                logger.exception("Event summary failed for %s", key)
-                await db.rollback()
-                continue
-        if summary.error and is_persistent_anthropic_failure(summary.error):
-            logger.warning("Stopping event summary cycle early: %s", summary.error)
+        if not await _refresh_event_summary(factory, key, grouped[key]):
             return
+
+
+async def _refresh_event_summary(factory, key: str, pubs: list[Notification]) -> bool:
+    """Regenerate one summary. Returns False to stop the cycle early."""
+    async with factory() as db:
+        try:
+            summary = await generate_event_summary(db, key, pubs)
+            await db.commit()
+        except Exception:
+            logger.exception("Event summary failed for %s", key)
+            await db.rollback()
+            return True
+    if summary.error and is_persistent_anthropic_failure(summary.error):
+        logger.warning("Stopping event summary cycle early: %s", summary.error)
+        return False
+    return True
 
 
 async def _notification_cycle() -> None:

@@ -81,6 +81,61 @@ def _coerce_sat_no(value: Any) -> Optional[int]:
         return None
 
 
+# (column, UDL key) pairs. Order matters where two keys feed one column:
+# the first present value wins.
+_ENVELOPE_FIELDS = (
+    ("msg_type", "msgType"),
+    ("data_mode", "dataMode"),
+    ("source", "source"),
+    ("classification_marking", "classificationMarking"),
+    ("created_by", "createdBy"),
+    ("orig_network", "origNetwork"),
+)
+_MSG_BODY_FIELDS = (
+    ("notso_identifier", "NOTSO"),
+    ("notice_id", "NOTSO"),
+    ("event_class", "Event_Class"),
+    ("subject", "Event_Class"),
+    ("event_type", "Event_Type"),
+    ("event_id", "Event_Id"),
+    ("status", "Status"),
+    ("description", "Event_Description"),
+    ("company_name", "Company_Name"),
+    ("notso_link", "NOTSO_Link"),
+)
+# Flat-shaped fallbacks for non-TACREP_NOTSO msgTypes that may surface
+# in the same endpoint. Only fill columns msgBody left empty.
+_FLAT_FALLBACK_FIELDS = (
+    ("notice_id", "noticeId"),
+    ("notice_id", "noticeNumber"),
+    ("subject", "subject"),
+    ("description", "description"),
+    ("description", "text"),
+    ("region", "region"),
+)
+_FLAT_FALLBACK_DATETIMES = (
+    ("effective_from", "effectiveFrom"),
+    ("effective_until", "effectiveUntil"),
+    ("effective_until", "expirationTime"),
+)
+
+
+def _fill_missing(mapped: dict[str, Any], source: dict[str, Any], fields) -> None:
+    for column, key in fields:
+        if column not in mapped:
+            _set_if_present(mapped, column, source.get(key))
+
+
+def _map_sat_ids(mapped: dict[str, Any], sat_ids: Any) -> None:
+    if not isinstance(sat_ids, list) or not sat_ids:
+        return
+    mapped["sat_ids"] = sat_ids
+    if len(sat_ids) == 1:
+        coerced = _coerce_sat_no(sat_ids[0])
+        if coerced is not None:
+            mapped["sat_no"] = coerced
+
+
 def _map_udl_record(record: dict[str, Any]) -> Optional[dict[str, Any]]:
     udl_id = record.get("id")
     if not udl_id:
@@ -92,55 +147,20 @@ def _map_udl_record(record: dict[str, Any]) -> Optional[dict[str, Any]]:
     }
 
     # Top-level UDL envelope
-    _set_if_present(mapped, "msg_type", record.get("msgType"))
-    _set_if_present(mapped, "data_mode", record.get("dataMode"))
-    _set_if_present(mapped, "source", record.get("source"))
-    _set_if_present(mapped, "classification_marking", record.get("classificationMarking"))
-    _set_if_present(mapped, "created_by", record.get("createdBy"))
-    _set_if_present(mapped, "orig_network", record.get("origNetwork"))
+    _fill_missing(mapped, record, _ENVELOPE_FIELDS)
     _set_datetime_if_present(mapped, "udl_created_at", record.get("createdAt"))
 
     # Nested msgBody fields (TACREP_NOTSO shape, also tolerant to others)
     msg_body = record.get("msgBody")
     if isinstance(msg_body, dict):
-        _set_if_present(mapped, "notso_identifier", msg_body.get("NOTSO"))
-        _set_if_present(mapped, "notice_id", msg_body.get("NOTSO"))
-        _set_if_present(mapped, "event_class", msg_body.get("Event_Class"))
-        _set_if_present(mapped, "subject", msg_body.get("Event_Class"))
-        _set_if_present(mapped, "event_type", msg_body.get("Event_Type"))
-        _set_if_present(mapped, "event_id", msg_body.get("Event_Id"))
-        _set_if_present(mapped, "status", msg_body.get("Status"))
-        _set_if_present(mapped, "description", msg_body.get("Event_Description"))
-        _set_if_present(mapped, "company_name", msg_body.get("Company_Name"))
-        _set_if_present(mapped, "notso_link", msg_body.get("NOTSO_Link"))
+        _fill_missing(mapped, msg_body, _MSG_BODY_FIELDS)
         _set_datetime_if_present(mapped, "publish_date", msg_body.get("Publish_Date"))
+        _map_sat_ids(mapped, msg_body.get("SatIds"))
 
-        sat_ids = msg_body.get("SatIds")
-        if isinstance(sat_ids, list) and sat_ids:
-            mapped["sat_ids"] = sat_ids
-            if len(sat_ids) == 1:
-                coerced = _coerce_sat_no(sat_ids[0])
-                if coerced is not None:
-                    mapped["sat_no"] = coerced
-
-    # Flat-shaped fallbacks for non-TACREP_NOTSO msgTypes that may
-    # surface in the same endpoint.
-    if "notice_id" not in mapped:
-        _set_if_present(mapped, "notice_id", record.get("noticeId"))
-    if "notice_id" not in mapped:
-        _set_if_present(mapped, "notice_id", record.get("noticeNumber"))
-    if "subject" not in mapped:
-        _set_if_present(mapped, "subject", record.get("subject"))
-    if "description" not in mapped:
-        _set_if_present(mapped, "description", record.get("description"))
-    if "description" not in mapped:
-        _set_if_present(mapped, "description", record.get("text"))
-    _set_if_present(mapped, "region", record.get("region"))
-    _set_datetime_if_present(mapped, "effective_from", record.get("effectiveFrom"))
-    if "effective_until" not in mapped:
-        _set_datetime_if_present(mapped, "effective_until", record.get("effectiveUntil"))
-    if "effective_until" not in mapped:
-        _set_datetime_if_present(mapped, "effective_until", record.get("expirationTime"))
+    _fill_missing(mapped, record, _FLAT_FALLBACK_FIELDS)
+    for column, key in _FLAT_FALLBACK_DATETIMES:
+        if column not in mapped:
+            _set_datetime_if_present(mapped, column, record.get(key))
 
     if "sat_no" not in mapped:
         coerced = _coerce_sat_no(record.get("satNo"))

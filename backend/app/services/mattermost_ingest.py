@@ -88,6 +88,97 @@ async def _channel_high_water(db: AsyncSession, channel_id: str) -> Optional[dat
     return result
 
 
+def _is_ingestible(post: dict[str, Any]) -> bool:
+    """Skip system messages, posts without a timestamp, and blank posts."""
+    if (post.get("type") or "").startswith("system_"):
+        return False
+    if not isinstance(post.get("create_at"), int):
+        return False
+    return bool((post.get("message") or "").strip())
+
+
+@dataclass
+class _ChannelContext:
+    client: MattermostClient
+    channel_id: str
+    channel_name: Optional[str]
+    user_cache: dict[str, Optional[str]]
+
+
+async def _post_row(ctx: _ChannelContext, post: dict[str, Any]) -> dict[str, Any]:
+    user_id = post.get("user_id") or ""
+    return {
+        "mm_post_id": post.get("id"),
+        "channel_id": ctx.channel_id,
+        "channel_name": ctx.channel_name,
+        "user_id": user_id,
+        "user_display_name": await _user_display_name(ctx.client, user_id, ctx.user_cache),
+        "posted_at": ms_to_datetime(post["create_at"]),
+        "message": post.get("message") or "",
+        "post_type": post.get("type") or None,
+        "raw": post,
+    }
+
+
+@dataclass
+class _Tally:
+    channels_polled: int = 0
+    channels_failed: int = 0
+    pulled: int = 0
+    inserted: int = 0
+    skipped: int = 0
+
+
+async def _ingest_channel(
+    db: AsyncSession,
+    client: MattermostClient,
+    channel_id: str,
+    since_default: datetime,
+    caches: tuple[dict[str, Optional[str]], dict[str, Optional[str]]],
+    tally: _Tally,
+) -> None:
+    user_cache, channel_name_cache = caches
+    high_water = await _channel_high_water(db, channel_id)
+    since = high_water or since_default
+    # Add 1ms padding so we don't re-pull the same boundary post.
+    since_ms = datetime_to_ms(since) + (1 if high_water else 0)
+    try:
+        payload = await client.get_channel_posts_since(channel_id, since_ms)
+    except MattermostAuthError as exc:
+        logger.warning("Mattermost channel %s skipped: %s", channel_id, exc)
+        tally.channels_failed += 1
+        return
+    except MattermostClientError as exc:
+        logger.warning("Mattermost channel %s failed: %s", channel_id, exc)
+        tally.channels_failed += 1
+        return
+
+    tally.channels_polled += 1
+    posts: dict[str, dict[str, Any]] = payload.get("posts") or {}
+    order: list[str] = payload.get("order") or []
+    tally.pulled += len(order)
+    if not order:
+        return
+
+    ctx = _ChannelContext(
+        client=client,
+        channel_id=channel_id,
+        channel_name=await _channel_name(client, channel_id, channel_name_cache),
+        user_cache=user_cache,
+    )
+    candidates = [posts.get(post_id) or {} for post_id in order]
+    keep = [post for post in candidates if _is_ingestible(post)]
+    tally.skipped += len(candidates) - len(keep)
+    if not keep:
+        return
+
+    rows = [await _post_row(ctx, post) for post in keep]
+    stmt = pg_insert(MattermostMessage).values(rows)
+    stmt = stmt.on_conflict_do_nothing(constraint="uq_mattermost_message_post_id")
+    result = await db.execute(stmt)
+    tally.inserted += result.rowcount or 0
+
+
 async def ingest_mattermost_messages(
     db: AsyncSession,
     *,
@@ -100,83 +191,22 @@ async def ingest_mattermost_messages(
         return MattermostIngestResult(0, 0, 0, 0, 0)
 
     fallback_since = datetime.now(timezone.utc) - timedelta(hours=24)
-    user_cache: dict[str, Optional[str]] = {}
-    channel_name_cache: dict[str, Optional[str]] = {}
-
-    channels_polled = 0
-    channels_failed = 0
-    pulled = 0
-    inserted = 0
-    skipped = 0
+    caches: tuple[dict[str, Optional[str]], dict[str, Optional[str]]] = ({}, {})
+    tally = _Tally()
 
     try:
         async with MattermostClient() as client:
             for channel_id in channels:
-                high_water = await _channel_high_water(db, channel_id)
-                since = high_water or fallback_since
-                # Add 1ms padding so we don't re-pull the same boundary post.
-                since_ms = datetime_to_ms(since) + (1 if high_water else 0)
-                try:
-                    payload = await client.get_channel_posts_since(channel_id, since_ms)
-                except MattermostAuthError as exc:
-                    logger.warning("Mattermost channel %s skipped: %s", channel_id, exc)
-                    channels_failed += 1
-                    continue
-                except MattermostClientError as exc:
-                    logger.warning("Mattermost channel %s failed: %s", channel_id, exc)
-                    channels_failed += 1
-                    continue
-
-                channels_polled += 1
-                posts: dict[str, dict[str, Any]] = payload.get("posts") or {}
-                order: list[str] = payload.get("order") or []
-                pulled += len(order)
-                if not order:
-                    continue
-
-                channel_display_name = await _channel_name(client, channel_id, channel_name_cache)
-
-                rows: list[dict[str, Any]] = []
-                for post_id in order:
-                    post = posts.get(post_id) or {}
-                    post_type = post.get("type") or ""
-                    if post_type.startswith("system_"):
-                        skipped += 1
-                        continue
-                    create_at_ms = post.get("create_at")
-                    if not isinstance(create_at_ms, int):
-                        skipped += 1
-                        continue
-                    msg_text = post.get("message") or ""
-                    if not msg_text.strip():
-                        skipped += 1
-                        continue
-                    user_id = post.get("user_id") or ""
-                    display = await _user_display_name(client, user_id, user_cache)
-                    rows.append(
-                        {
-                            "mm_post_id": post.get("id"),
-                            "channel_id": channel_id,
-                            "channel_name": channel_display_name,
-                            "user_id": user_id,
-                            "user_display_name": display,
-                            "posted_at": ms_to_datetime(create_at_ms),
-                            "message": msg_text,
-                            "post_type": post_type or None,
-                            "raw": post,
-                        }
-                    )
-
-                if not rows:
-                    continue
-
-                stmt = pg_insert(MattermostMessage).values(rows)
-                stmt = stmt.on_conflict_do_nothing(constraint="uq_mattermost_message_post_id")
-                result = await db.execute(stmt)
-                inserted += result.rowcount or 0
+                await _ingest_channel(db, client, channel_id, fallback_since, caches, tally)
     except MattermostClientError as exc:
         logger.warning("Mattermost ingest aborted: %s", exc)
-        channels_failed = len(channels) - channels_polled
+        tally.channels_failed = len(channels) - tally.channels_polled
+
+    channels_polled = tally.channels_polled
+    channels_failed = tally.channels_failed
+    pulled = tally.pulled
+    inserted = tally.inserted
+    skipped = tally.skipped
 
     summary = MattermostIngestResult(
         channels_polled=channels_polled,

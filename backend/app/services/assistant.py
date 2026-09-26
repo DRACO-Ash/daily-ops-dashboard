@@ -90,34 +90,32 @@ class AssistantError(Exception):
     """Raised when Claude returns an unparseable or invalid response."""
 
 
+# (label, attribute) in prompt order. Falsy values are omitted; datetimes
+# are rendered as ISO 8601.
+_NOTIFICATION_FIELDS = (
+    ("Notice", "notso_identifier"),
+    ("Message type", "msg_type"),
+    ("Event type", "event_type"),
+    ("Event class", "event_class"),
+    ("Status", "status"),
+    ("Subject", "subject"),
+    ("Description", "description"),
+    ("Region", "region"),
+    ("Company", "company_name"),
+    ("Published", "publish_date"),
+    ("Effective from", "effective_from"),
+    ("Effective until", "effective_until"),
+    ("UDL created", "udl_created_at"),
+)
+
+
 def _format_notification(n: Notification) -> str:
     lines = ["NOTIFICATION:"]
-    if n.notso_identifier:
-        lines.append(f"  Notice: {n.notso_identifier}")
-    if n.msg_type:
-        lines.append(f"  Message type: {n.msg_type}")
-    if n.event_type:
-        lines.append(f"  Event type: {n.event_type}")
-    if n.event_class:
-        lines.append(f"  Event class: {n.event_class}")
-    if n.status:
-        lines.append(f"  Status: {n.status}")
-    if n.subject:
-        lines.append(f"  Subject: {n.subject}")
-    if n.description:
-        lines.append(f"  Description: {n.description}")
-    if n.region:
-        lines.append(f"  Region: {n.region}")
-    if n.company_name:
-        lines.append(f"  Company: {n.company_name}")
-    if n.publish_date:
-        lines.append(f"  Published: {n.publish_date.isoformat()}")
-    if n.effective_from:
-        lines.append(f"  Effective from: {n.effective_from.isoformat()}")
-    if n.effective_until:
-        lines.append(f"  Effective until: {n.effective_until.isoformat()}")
-    if n.udl_created_at:
-        lines.append(f"  UDL created: {n.udl_created_at.isoformat()}")
+    for label, attr in _NOTIFICATION_FIELDS:
+        value = getattr(n, attr)
+        if value:
+            rendered = value.isoformat() if isinstance(value, datetime) else value
+            lines.append(f"  {label}: {rendered}")
     if n.sat_no is not None:
         lines.append(f"  Satellite: {n.sat_no}")
     if n.sat_ids:
@@ -273,45 +271,22 @@ def _build_user_message(
 
 
 def _extract_json(text: str) -> dict[str, Any]:
-    """Pull the first balanced JSON object out of a model response.
+    """Pull the first JSON object out of a model response.
 
-    Walks the text character by character tracking brace depth, but
-    skips characters inside string literals so a `{` or `}` appearing
-    inside a quoted value (e.g. a procedure snippet Claude is citing)
-    doesn't throw the counter off and produce a spurious "unterminated"
-    error.
+    Decodes from the first `{` with the standard library's incremental
+    decoder, so braces inside string literals (e.g. a procedure snippet
+    Claude is citing) are handled correctly and trailing prose is ignored.
     """
     start = text.find("{")
     if start == -1:
         raise AssistantError("Model response contained no JSON object")
-    depth = 0
-    in_string = False
-    escape = False
-    for i in range(start, len(text)):
-        ch = text[i]
-        if escape:
-            escape = False
-            continue
-        if in_string:
-            if ch == "\\":
-                escape = True
-            elif ch == '"':
-                in_string = False
-            continue
-        if ch == '"':
-            in_string = True
-            continue
-        if ch == "{":
-            depth += 1
-        elif ch == "}":
-            depth -= 1
-            if depth == 0:
-                payload = text[start : i + 1]
-                try:
-                    return json.loads(payload)
-                except json.JSONDecodeError as exc:
-                    raise AssistantError(f"Model response was not valid JSON: {exc}") from exc
-    raise AssistantError("Model response had an unterminated JSON object")
+    try:
+        payload, _end = json.JSONDecoder().raw_decode(text, start)
+    except json.JSONDecodeError as exc:
+        raise AssistantError(f"Model response was not valid JSON: {exc}") from exc
+    if not isinstance(payload, dict):
+        raise AssistantError("Model response JSON was not an object")
+    return payload
 
 
 async def _call_claude(user_message: str) -> tuple[dict[str, Any], str]:
