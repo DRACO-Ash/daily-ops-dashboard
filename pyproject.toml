@@ -14,8 +14,11 @@ exclude = ["tests/"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests/backend"]
+pythonpath = ["backend"]
 
 [tool.coverage.run]
+# Measures the Python backend only. The React frontend (frontend/src) is
+# NOT in this figure; see deploy/APPSTORE.md.
 source = ["app"]
 omit = ["*/tests/*", "*/migrations/*"]
 
@@ -28,3 +31,7 @@ exclude_lines = [
 ]
 show_missing = true
 skip_covered = false
+fail_under = 90
+
+[tool.coverage.xml]
+output = "coverage.xml"

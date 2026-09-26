@@ -19,26 +19,15 @@ jobs:
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - run: pip install -r backend/requirements.txt
-      - run: pip install ruff mypy bandit
-      - run: ruff check backend/app
+      - run: pip install -r backend/requirements-dev.txt
+      - run: python tools/sniff_check.py --self-test > /dev/null
+      - run: python tools/sniff_check.py backend migrations tests tools frontend/index.html
+      - run: ruff check backend/app tests
       - run: mypy backend/app
       - run: bandit -r backend/app -ll
-      - run: pip install pytest pytest-asyncio pytest-cov httpx
-      - run: pytest tests/backend --cov=app --cov-report=term --cov-fail-under=40
-        env:
-          PYTHONPATH: backend
-          APP_SECRET_KEY: test-secret-key-for-ci-only
-          APP_ENV: development
-          APP_ALLOWED_ORIGINS: '["http://localhost:3000"]'
-          POSTGRES_HOST: localhost
-          POSTGRES_PORT: "5432"
-          POSTGRES_DB: ops_dashboard
-          POSTGRES_USER: ops_user
-          POSTGRES_PASSWORD: test-password
-          JWT_ALGORITHM: HS256
-          JWT_ACCESS_TOKEN_EXPIRE_MINUTES: "30"
-          JWT_REFRESH_TOKEN_EXPIRE_DAYS: "7"
+      # Settings defaults for tests come from tests/backend/conftest.py;
+      # coverage source, XML path and the 90% floor from pyproject.toml.
+      - run: pytest --cov --cov-report=term --cov-report=xml
 
   frontend:
     runs-on: ubuntu-latest
