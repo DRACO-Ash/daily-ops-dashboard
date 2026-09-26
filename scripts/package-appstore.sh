@@ -11,7 +11,7 @@ set -eu
 
 cd "$(git rev-parse --show-toplevel)"
 
-version="$(sed -n 's/.*"version": *"\([^"]*\)".*/\1/p' frontend/package.json | head -1)"
+version="$(sed -n 's/^APP_VERSION = "\(.*\)"/\1/p' backend/app/api/v1/routes/health.py)"
 name="daily-ops-dashboard"
 out="dist/${name}-${version}.zip"
 
