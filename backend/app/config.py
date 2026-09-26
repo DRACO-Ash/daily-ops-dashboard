@@ -1,7 +1,8 @@
+import os
 from typing import List
 from urllib.parse import quote
 
-from pydantic import Field
+from pydantic import AliasChoices, Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -15,11 +16,15 @@ class Settings(BaseSettings):
     app_secret_key: str
     app_allowed_origins: List[str] = Field(default_factory=list)
 
-    postgres_host: str
-    postgres_port: int = 5432
-    postgres_db: str
-    postgres_user: str
-    postgres_password: str
+    # POSTGRES_* is the local compose convention; PG* is what the
+    # Bluestaq App Store PostgreSQL add-on injects. Either works.
+    postgres_host: str = Field(validation_alias=AliasChoices("POSTGRES_HOST", "PGHOST"))
+    postgres_port: int = Field(
+        default=5432, validation_alias=AliasChoices("POSTGRES_PORT", "PGPORT")
+    )
+    postgres_db: str = Field(validation_alias=AliasChoices("POSTGRES_DB", "PGDATABASE"))
+    postgres_user: str = Field(validation_alias=AliasChoices("POSTGRES_USER", "PGUSER"))
+    postgres_password: str = Field(validation_alias=AliasChoices("POSTGRES_PASSWORD", "PGPASSWORD"))
 
     jwt_algorithm: str = "HS256"
     jwt_access_token_expire_minutes: int = 30
@@ -47,7 +52,17 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-sonnet-4-6"
     anthropic_max_tokens: int = 4096
 
-    procedure_storage_path: str = "/data/procedures"
+    # Defaults under the App Store file-storage mount (STORAGE_MOUNT_PATH,
+    # normally /data) so uploads survive pod restarts.
+    procedure_storage_path: str = Field(
+        default_factory=lambda: os.path.join(
+            os.environ.get("STORAGE_MOUNT_PATH", "/data"), "procedures"
+        )
+    )
+
+    # Built frontend bundle served by the backend in the single-container
+    # deployment. Absent in local dev, where Vite serves the frontend.
+    static_dir: str = "/app/static"
 
     background_refresh_enabled: bool = True
     background_auto_evaluate: bool = True

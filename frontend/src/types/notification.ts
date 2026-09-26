@@ -1,3 +1,5 @@
+import type { SortDirection } from "./common";
+
 export interface Notification {
   id: string;
   udl_id: string | null;
@@ -85,5 +87,5 @@ export interface NotificationListQuery {
   limit?: number;
   offset?: number;
   sort_by?: NotificationSortColumn;
-  sort_dir?: "asc" | "desc";
+  sort_dir?: SortDirection;
 }

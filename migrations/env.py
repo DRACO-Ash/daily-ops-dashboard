@@ -19,6 +19,7 @@ from app.models import (  # noqa: F401  ensure models are registered on Base.met
     shift_summary,
     user,
 )
+from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from sqlalchemy.ext.asyncio import async_engine_from_config
 
@@ -28,6 +29,10 @@ if config.config_file_name is not None:
     fileConfig(config.config_file_name)
 
 target_metadata = Base.metadata
+
+# Serialises migrations when several replicas start at once. Arbitrary
+# constant, unique to this application.
+MIGRATION_LOCK_ID = 0x0D0D0A5B
 
 
 def run_migrations_offline() -> None:
@@ -43,6 +48,8 @@ def run_migrations_offline() -> None:
 
 
 def do_run_migrations(connection: Connection) -> None:
+    connection.execute(text("SELECT pg_advisory_lock(:id)"), {"id": MIGRATION_LOCK_ID})
+    connection.commit()
     context.configure(
         connection=connection,
         target_metadata=target_metadata,

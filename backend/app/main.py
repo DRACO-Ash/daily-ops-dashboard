@@ -21,6 +21,7 @@ from app.api.v1.routes import (
 from app.config import settings
 from app.core.logging import configure_logging
 from app.core.request_id import REQUEST_ID_HEADER, RequestIDMiddleware
+from app.core.spa import SecurityHeadersMiddleware, mount_spa
 from app.services.background_refresh import (
     maneuver_loop,
     mattermost_loop,
@@ -62,6 +63,7 @@ app = FastAPI(
 )
 
 app.add_middleware(RequestIDMiddleware)
+app.add_middleware(SecurityHeadersMiddleware)
 
 app.add_middleware(
     CORSMiddleware,
@@ -83,3 +85,6 @@ app.include_router(shift_log.router, prefix="/api/v1")
 app.include_router(event_timers.router, prefix="/api/v1")
 app.include_router(assistant.router, prefix="/api/v1")
 app.include_router(audit.router, prefix="/api/v1")
+
+# Registered last so every API route above takes precedence.
+mount_spa(app, settings.static_dir)

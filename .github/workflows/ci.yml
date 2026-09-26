@@ -51,6 +51,7 @@ jobs:
       - run: cd frontend && npm run lint
       - run: cd frontend && npm run format:check
       - run: cd frontend && npm run test
+      - run: cd frontend && npm run build
 
   secrets:
     runs-on: ubuntu-latest

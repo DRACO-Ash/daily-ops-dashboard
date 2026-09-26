@@ -14,6 +14,17 @@ All notable changes to the Daily Operations Dashboard are recorded here. The for
 
 ### Added
 
+● **Bluestaq App Store packaging.** Root multi-stage `Dockerfile` builds the React bundle and runs FastAPI, which now serves the SPA alongside `/api/v1` (`app/core/spa.py`) with CSP and security headers. `deploy/entrypoint.sh` retries migrations until Postgres is ready, optionally bootstraps an admin, and binds `$PORT` (default 8080). Config accepts the add-on `PG*` variables and stores procedures under `STORAGE_MOUNT_PATH`. `scripts/package-appstore.sh` builds the upload zip; `deploy/APPSTORE.md` covers submission.
+
+### Security
+
+● Replaced `python-jose` (unfixed `ecdsa` advisory) with PyJWT. Bumped `fastapi` (and Starlette), `python-multipart`, `cryptography` and `axios` past known CVEs. Removed unused `aiopg`.
+
+### Fixed
+
+● Frontend production build: restored the `SortDirection` type lost with the Element Sets removal; `tsc` had been failing. CI now runs `npm run build`.
+● Alembic migrations take a Postgres advisory lock so concurrent replicas do not race.
+
 ● **`scripts\dev.ps1` one-file local deploy and run.** Idempotent: creates `.env` from `.env.example` with a fresh `APP_SECRET_KEY` if missing, generates a self-signed TLS certificate via docker if `infra/certs/` is empty, brings up the full stack, waits for the database, applies pending alembic migrations inside the backend container, bootstraps the first admin user if `app_user` is empty, and tails backend logs. Supports `-Down`, `-Restart`, `-Reset` (destructive), `-NoLogs`, `-RegenerateCerts`. Admin credentials can be supplied via `-AdminUsername`/`-AdminPassword` flags or `$env:ADMIN_USERNAME`/`$env:ADMIN_PASSWORD` for non-interactive runs.
 ● **Real TACREP_NOTSO shape support.** UDL nests the interesting fields inside `msgBody`; mapper now extracts `NOTSO` (notice identifier), `Event_Class`, `Event_Type`, `Event_Id`, `Status` (OPEN/CLOSED), `Event_Description`, `Company_Name`, `NOTSO_Link`, `Publish_Date`, and the `SatIds` array. Top-level envelope fields (`createdBy`, `origNetwork`, `classificationMarking`, etc.) are now captured too. Migration `0006_notif_msgbody` adds eleven new typed columns plus four query indexes (`notso_identifier`, `status`, `event_type`, `publish_date`).
 ● **Notifications page redesign.** List view now shows Notice / Status / Type / Event class / Sat IDs / UDL created. Status filter (OPEN/CLOSED), event-type filter, and status indicator pills. Ingest form defaults `Source` to `JCO` to match the production query.

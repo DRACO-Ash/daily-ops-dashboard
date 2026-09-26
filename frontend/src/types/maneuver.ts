@@ -1,3 +1,5 @@
+import type { SortDirection } from "./common";
+
 export interface Maneuver {
   id: string;
   udl_id: string | null;
@@ -50,5 +52,5 @@ export interface ManeuverListQuery {
   limit?: number;
   offset?: number;
   sort_by?: ManeuverSortColumn;
-  sort_dir?: "asc" | "desc";
+  sort_dir?: SortDirection;
 }
