@@ -60,8 +60,26 @@ Mark every credential as secret.
 
 Everything else in `.env.example` has a working default. `APP_ALLOWED_ORIGINS` can stay empty because the frontend and API share one origin.
 
+## Quality gates
+
+Run these before building the package. CI runs the same commands.
+
+```sh
+pip install -r backend/requirements-dev.txt
+python tools/sniff_check.py --self-test > /dev/null     # checker proves it can fail
+python tools/sniff_check.py backend migrations tests tools frontend/index.html
+pytest --cov --cov-report=term --cov-report=xml         # writes coverage.xml, fails under 90%
+```
+
+● **Coverage.** 99.96% of the Python backend (2,824 statements, 442 tests). This figure excludes the React frontend (`frontend/src`) entirely: it has no unit tests, so SonarQube will count it as uncovered if it analyses that directory.
+● **Code sniffs.** `sniff_check` reports 0 findings. See `docs/developer/SNIFFS.md` for the rules and for what it cannot check.
+
 ## Known constraints
 
-● **Pipeline template.** Unit coverage is currently around 56%. The python template's SonarQube gate needs 80%, so this package is built to run through the root Dockerfile. If the platform applies the gate anyway, coverage is the gap to close.
+● **Pipeline template.** The backend now clears the python template's 80% gate. Whether the platform detects this layout as python (the requirements file sits in `backend/`) or treats it as docker-only is not yet confirmed.
+● **Frontend coverage.** See Quality gates. If the platform's SonarQube project includes `frontend/src`, overall coverage will fall below 80% until the frontend gains tests.
 ● **Replicas.** Keep `replicaCount` at 1. The UDL, maneuver and Mattermost refresh loops run in every replica and would duplicate ingest and AI calls.
 ● **Frontend dependency.** `react-router-dom` 6 carries a moderate advisory (GHSA-2j2x-hqr9-3h42) that needs a v7 upgrade.
+● **Procedure files uploaded before this fix** were stored as `None.<ext>` and overwrote one another. Only the last upload of each extension survives on disk; earlier rows point at the wrong file and should be re-uploaded.
+● **Audit rows written before this fix** cannot be re-verified from the stored timestamp. The chain is verifiable from the first entry written after deployment.
+● **Open items, not fixed.** No role checks on procedure, shift log or timer routes (any analyst can delete). Monthly timers drift to the 28th after a short month. The audit chain orders by timestamp, which depends on a steady server clock; a sequence column would be more robust.

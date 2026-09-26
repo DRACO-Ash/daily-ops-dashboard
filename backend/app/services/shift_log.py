@@ -63,12 +63,6 @@ section 1.
 """
 
 
-def _call_claude_text(system_prompt: str, user_message: str, max_tokens: int) -> str:
-    """Wrapper omitted here; see _async_call_claude_text. Synchronous
-    callers are not expected; this stub exists to anchor the import."""
-    raise NotImplementedError
-
-
 async def _async_call_claude_text(
     system_prompt: str,
     user_message: str,
