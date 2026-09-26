@@ -32,8 +32,15 @@ class Settings(BaseSettings):
 
     mattermost_url: str = ""
     mattermost_bot_token: str = ""
+    # Channel discovery: when MATTERMOST_CHANNEL_IDS is empty, every open
+    # or private channel the bot belongs to in this team is ingested. Give
+    # the team URL name (e.g. "jco"), or its id to skip the name lookup.
+    mattermost_team: str = ""
     mattermost_team_id: str = ""
     mattermost_poll_interval: int = 60
+    # Full-history backfill runs this many 200-post pages per channel per
+    # cycle, so a large channel fills over several cycles.
+    mattermost_backfill_pages_per_cycle: int = 10
     # Comma-separated list of Mattermost channel IDs to poll. Channels
     # the bot account isn't a member of are silently skipped (Mattermost
     # rejects the GET with a 403).

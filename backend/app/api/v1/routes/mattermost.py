@@ -2,8 +2,8 @@ from datetime import datetime
 from typing import Optional
 
 from fastapi import APIRouter, Depends, Query
+from sqlalchemy import ColumnElement, select
 from sqlalchemy import func as sa_func
-from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.db.session import get_db
@@ -20,13 +20,16 @@ async def list_messages(
     channel_id: Optional[str] = Query(None),
     user_id: Optional[str] = Query(None),
     posted_at_gte: Optional[datetime] = Query(None),
+    include_deleted: bool = Query(False),
     limit: int = Query(100, ge=1, le=500),
     offset: int = Query(0, ge=0),
     db: AsyncSession = Depends(get_db),
     _current_user: User = Depends(get_current_user),
 ) -> MattermostMessagePage:
     base = select(MattermostMessage)
-    conditions = []
+    conditions: list[ColumnElement[bool]] = []
+    if not include_deleted:
+        conditions.append(MattermostMessage.deleted_at.is_(None))
     if channel_id is not None:
         conditions.append(MattermostMessage.channel_id == channel_id)
     if user_id is not None:

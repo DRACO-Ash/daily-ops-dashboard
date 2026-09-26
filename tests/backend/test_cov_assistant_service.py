@@ -243,7 +243,10 @@ async def test_load_recent_chat_returns_chronological_order(monkeypatch) -> None
     db.execute = AsyncMock(return_value=_scalars_result([newest, older]))
     result = await svc._load_recent_chat(db)
     assert [m.mm_post_id for m in result] == ["old", "new"]
-    assert "LIMIT" in str(db.execute.await_args.args[0])
+    sql = str(db.execute.await_args.args[0])
+    assert "LIMIT" in sql
+    # Deleted posts stay in the archive but never reach the model.
+    assert "mattermost_message.deleted_at IS NULL" in sql
 
 
 # _format_chat

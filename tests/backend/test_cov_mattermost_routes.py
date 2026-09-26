@@ -111,8 +111,19 @@ async def test_messages_default_page_without_filters() -> None:
     assert "raw" not in body["items"][0]
     assert len(captured) == 2
     items_sql = str(captured[1])
-    assert "WHERE" not in items_sql
+    assert "WHERE mattermost_message.deleted_at IS NULL ORDER BY" in items_sql
     assert "ORDER BY mattermost_message.posted_at DESC" in items_sql
+
+
+async def test_messages_include_deleted_drops_the_deleted_filter() -> None:
+    captured: list = []
+    app.dependency_overrides[get_current_user] = _override_current_user(_make_user())
+    app.dependency_overrides[get_db] = _override_db([], 0, captured)
+
+    response = await _get({"include_deleted": "true"})
+
+    assert response.status_code == 200
+    assert "WHERE" not in str(captured[1])
 
 
 async def test_messages_applies_all_filters_and_paging() -> None:

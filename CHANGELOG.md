@@ -14,6 +14,8 @@ All notable changes to the Daily Operations Dashboard are recorded here. The for
 
 ### Added
 
+● **Mattermost archive (ported from `mattermost_channel_pull`).** With `MATTERMOST_TEAM` set, the ingest discovers every open or private channel the bot (dok.bot) belongs to, skipping archived channels and direct messages. The first cycle for a channel walks its full history backwards with a `before` cursor, resuming across cycles (`MATTERMOST_BACKFILL_PAGES_PER_CYCLE`); later cycles pull only posts created or modified since the channel's watermark. Edits replace the stored text only when newer, deletions set `deleted_at` and keep the last text, and replies record `root_id`. Author names are looked up in batches. The client retries 429 and 5xx with `Retry-After`. Migration `0016_mattermost_archive` adds the revision columns and `mattermost_channel_state`. Deleted posts are hidden from the messages list (unless `include_deleted=true`) and from the assistant.
+
 ● **Bluestaq App Store packaging.** Root multi-stage `Dockerfile` builds the React bundle and runs FastAPI, which now serves the SPA alongside `/api/v1` (`app/core/spa.py`) with CSP and security headers. `deploy/entrypoint.sh` retries migrations until Postgres is ready, optionally bootstraps an admin, and binds `$PORT` (default 8080). Config accepts the add-on `PG*` variables and stores procedures under `STORAGE_MOUNT_PATH`. `scripts/package-appstore.sh` builds the upload zip; `deploy/APPSTORE.md` covers submission.
 
 ### Security

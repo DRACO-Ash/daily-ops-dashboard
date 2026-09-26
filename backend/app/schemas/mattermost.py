@@ -17,6 +17,9 @@ class MattermostMessageRead(BaseModel):
     posted_at: datetime
     message: str
     post_type: Optional[str] = None
+    root_id: Optional[str] = None
+    edited_at: Optional[datetime] = None
+    deleted_at: Optional[datetime] = None
     created_at: datetime
     updated_at: datetime
 

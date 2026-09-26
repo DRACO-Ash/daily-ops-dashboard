@@ -201,7 +201,10 @@ async def _load_recent_chat(db: AsyncSession) -> list[MattermostMessage]:
     # for chronological display.
     stmt = (
         select(MattermostMessage)
-        .where(MattermostMessage.posted_at >= window_start)
+        .where(
+            MattermostMessage.posted_at >= window_start,
+            MattermostMessage.deleted_at.is_(None),
+        )
         .order_by(MattermostMessage.posted_at.desc())
         .limit(limit)
     )

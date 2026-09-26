@@ -54,7 +54,10 @@ Mark every credential as secret.
 | `APP_ENV` | Yes | `production` (disables `/api/docs`) |
 | `ANTHROPIC_API_KEY` | For the assistant, secret | |
 | `UDL_USERNAME`, `UDL_PASSWORD` | For UDL ingest, secret | |
-| `MATTERMOST_URL`, `MATTERMOST_BOT_TOKEN`, `MATTERMOST_TEAM_ID`, `MATTERMOST_CHANNEL_IDS` | For Mattermost ingest, token secret | |
+| `MATTERMOST_URL` | For Mattermost ingest | `https://mattermost.dragonarmy.rocks` |
+| `MATTERMOST_BOT_TOKEN` | For Mattermost ingest, secret | dok.bot's personal access token |
+| `MATTERMOST_TEAM` | For Mattermost ingest | `jco`: ingests every channel dok.bot belongs to |
+| `MATTERMOST_CHANNEL_IDS` | No | Overrides discovery with specific channel ids |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD` | First deploy only, secret | Remove after first sign-in |
 | `BACKGROUND_REFRESH_ENABLED` | No | Default `true` |
 
@@ -82,4 +85,5 @@ pytest --cov --cov-report=term --cov-report=xml         # writes coverage.xml, f
 ● **Frontend dependency.** `react-router-dom` 6 carries a moderate advisory (GHSA-2j2x-hqr9-3h42) that needs a v7 upgrade.
 ● **Procedure files uploaded before this fix** were stored as `None.<ext>` and overwrote one another. Only the last upload of each extension survives on disk; earlier rows point at the wrong file and should be re-uploaded.
 ● **Audit rows written before this fix** cannot be re-verified from the stored timestamp. The chain is verifiable from the first entry written after deployment.
+● **Mattermost scope.** Ingest covers every channel dok.bot is a member of, human chat included, and the assistant sends recent chat to the Anthropic API. Adding the bot to a channel brings that channel's full history in on the next cycle.
 ● **Open items, not fixed.** No role checks on procedure, shift log or timer routes (any analyst can delete). Monthly timers drift to the 28th after a short month. The audit chain orders by timestamp, which depends on a steady server clock; a sequence column would be more robust.

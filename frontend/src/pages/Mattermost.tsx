@@ -100,8 +100,8 @@ export default function MattermostPage() {
 
         {!loading && items.length === 0 && (
           <p className="muted">
-            No messages yet. Configure <code>MATTERMOST_CHANNEL_IDS</code> in your .env and make
-            sure the bot account is a member of those channels.
+            No messages yet. Set <code>MATTERMOST_TEAM</code> to ingest every channel the bot
+            belongs to, or <code>MATTERMOST_CHANNEL_IDS</code> for specific channels.
           </p>
         )}
 
@@ -112,6 +112,8 @@ export default function MattermostPage() {
                 <span className="comms-channel">#{m.channel_name ?? m.channel_id}</span>
                 <span className="comms-author">@{m.user_display_name ?? m.user_id}</span>
                 <span className="comms-time">{formatDateTime(m.posted_at)}</span>
+                {m.root_id && <span className="muted">reply</span>}
+                {m.edited_at && <span className="muted">edited</span>}
               </div>
               <p className="comms-body">{m.message}</p>
             </li>
