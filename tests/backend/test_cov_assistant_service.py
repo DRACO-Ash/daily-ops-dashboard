@@ -472,6 +472,18 @@ async def test_evaluate_notification_empty_summary_gets_placeholder(monkeypatch)
     assert evaluation.procedures_used == []
 
 
+async def test_evaluate_notification_null_summary_gets_placeholder(monkeypatch) -> None:
+    db = _eval_db(_make_notification(), [])
+    monkeypatch.setattr(svc, "_load_relevant_maneuvers", AsyncMock(return_value=[]))
+    monkeypatch.setattr(svc, "_load_recent_chat", AsyncMock(return_value=[]))
+    claude = AsyncMock(return_value=({"summary": None}, "claude-x"))
+    monkeypatch.setattr(svc, "_call_claude", claude)
+
+    evaluation = await svc.evaluate_notification(db, uuid.uuid4())
+
+    assert evaluation.summary == "No summary returned."
+
+
 async def test_evaluate_notification_records_claude_failure(monkeypatch, caplog) -> None:
     monkeypatch.setattr(settings, "anthropic_model", "claude-fallback")
     notification = _make_notification()

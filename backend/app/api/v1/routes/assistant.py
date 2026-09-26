@@ -54,8 +54,7 @@ def _rollup_urgency(evaluation: AssistantEvaluation | None) -> tuple[str, str | 
             best_rank = rank
             best = urgency
             text = action.get("action")
-            if isinstance(text, str):
-                top_action = text
+            top_action = text if isinstance(text, str) else None
     return best, top_action
 
 

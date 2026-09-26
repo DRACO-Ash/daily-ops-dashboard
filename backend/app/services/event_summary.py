@@ -110,6 +110,8 @@ async def _call_claude(user_message: str) -> tuple[str, str]:
         )
     except anthropic.APIError as exc:
         raise AssistantError(f"Anthropic API error: {exc}") from exc
+    if response.stop_reason == "max_tokens":
+        raise AssistantError("Model response was truncated before the narrative completed")
     chunks: list[str] = []
     for block in response.content:
         text_value = getattr(block, "text", None)

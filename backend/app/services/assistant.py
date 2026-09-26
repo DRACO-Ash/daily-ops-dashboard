@@ -284,8 +284,7 @@ def _extract_json(text: str) -> dict[str, Any]:
         payload, _end = json.JSONDecoder().raw_decode(text, start)
     except json.JSONDecodeError as exc:
         raise AssistantError(f"Model response was not valid JSON: {exc}") from exc
-    if not isinstance(payload, dict):
-        raise AssistantError("Model response JSON was not an object")
+    # Decoding starts at "{", so a successful decode is always an object.
     return payload
 
 
@@ -384,7 +383,7 @@ async def evaluate_notification(
         }
         model = settings.anthropic_model
 
-    summary = str(structured.get("summary", "")) or "No summary returned."
+    summary = str(structured.get("summary") or "") or "No summary returned."
 
     evaluation = AssistantEvaluation(
         notification_id=notification.id,

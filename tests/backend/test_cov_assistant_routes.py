@@ -176,6 +176,15 @@ def test_rollup_urgency_picks_highest_and_skips_non_dicts() -> None:
     assert routes._rollup_urgency(ev) == ("high", "Escalate now")
 
 
+def test_rollup_urgency_does_not_borrow_lower_urgency_action_text() -> None:
+    actions = [
+        {"urgency": "low", "action": "Log it"},
+        {"urgency": "high", "action": None},
+    ]
+    ev = _make_evaluation(uuid.uuid4(), actions=actions)
+    assert routes._rollup_urgency(ev) == ("high", None)
+
+
 def test_rollup_urgency_blank_urgency_defaults_to_low() -> None:
     ev = _make_evaluation(uuid.uuid4(), actions=[{"urgency": "", "action": "Note it"}])
     assert routes._rollup_urgency(ev) == ("low", "Note it")

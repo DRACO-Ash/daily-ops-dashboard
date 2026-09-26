@@ -84,7 +84,7 @@ def fake_claude(monkeypatch):
 
 
 def _text_response(*texts: Any) -> SimpleNamespace:
-    return SimpleNamespace(content=[SimpleNamespace(text=t) for t in texts])
+    return SimpleNamespace(content=[SimpleNamespace(text=t) for t in texts], stop_reason="end_turn")
 
 
 # compute_event_key
@@ -190,8 +190,16 @@ async def test_call_claude_wraps_api_error(fake_claude) -> None:
 
 
 async def test_call_claude_no_text_blocks(fake_claude) -> None:
-    fake_claude(SimpleNamespace(content=[SimpleNamespace(type="tool_use")]))
+    fake_claude(SimpleNamespace(content=[SimpleNamespace(type="tool_use")], stop_reason="end_turn"))
     with pytest.raises(AssistantError, match="no text blocks"):
+        await svc._call_claude("hi")
+
+
+async def test_call_claude_rejects_truncated_narrative(fake_claude) -> None:
+    response = _text_response("First sentence. Second sen")
+    response.stop_reason = "max_tokens"
+    fake_claude(response)
+    with pytest.raises(AssistantError, match="truncated"):
         await svc._call_claude("hi")
 
 
