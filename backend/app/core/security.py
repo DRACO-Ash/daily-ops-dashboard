@@ -59,6 +59,12 @@ def create_refresh_token(subject: str, expires_delta: Optional[timedelta] = None
 
 def decode_token(token: str) -> Optional[dict]:
     try:
-        return jwt.decode(token, settings.app_secret_key, algorithms=[settings.jwt_algorithm])
+        # A token without an expiry would never lapse; reject it outright.
+        return jwt.decode(
+            token,
+            settings.app_secret_key,
+            algorithms=[settings.jwt_algorithm],
+            options={"require": ["exp"]},
+        )
     except InvalidTokenError:
         return None

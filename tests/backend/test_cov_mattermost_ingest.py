@@ -178,7 +178,7 @@ async def test_ingest_inserts_filters_caches_and_audits(
     db.commit.assert_awaited_once()
 
 
-async def test_high_water_adds_one_ms_and_skips_empty_order(
+async def test_high_water_is_used_unpadded_and_skips_empty_order(
     monkeypatch: pytest.MonkeyPatch, audit: AsyncMock
 ) -> None:
     fake = _FakeMattermost(
@@ -191,7 +191,7 @@ async def test_high_water_adds_one_ms_and_skips_empty_order(
 
     assert result == MattermostIngestResult(1, 0, 0, 0, 0)
     posts_request = fake.requests[0]
-    assert posts_request.url.params["since"] == str(datetime_to_ms(HIGH_WATER) + 1)
+    assert posts_request.url.params["since"] == str(datetime_to_ms(HIGH_WATER))
     # No channel-name lookup when there is nothing to store.
     assert fake.paths() == ["/channels/c1/posts"]
     assert db.inserts == []

@@ -24,7 +24,8 @@ def _advance(target: datetime, recurrence: str) -> datetime:
         # relativedelta handles month-end edge cases: Jan 31 + 1 month
         # lands on Feb 28/29 rather than overflowing.
         return target + relativedelta(months=1)
-    return target
+    # Returning `target` unchanged would spin _next_future_occurrence forever.
+    raise ValueError(f"Unknown recurrence: {recurrence!r}")
 
 
 def _next_future_occurrence(target: datetime, recurrence: str) -> datetime:

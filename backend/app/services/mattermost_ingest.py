@@ -2,7 +2,7 @@
 
 Strategy per channel:
 1. Find the most recent `posted_at` we already have for that channel.
-2. Ask Mattermost for posts since (high-water mark - 1ms), or since
+2. Ask Mattermost for posts since the high-water mark, or since
    `now - window` on the first run.
 3. Upsert by `mm_post_id`; duplicates are ignored.
 4. System messages (type starts with `system_`) are skipped.
@@ -140,8 +140,9 @@ async def _ingest_channel(
     user_cache, channel_name_cache = caches
     high_water = await _channel_high_water(db, channel_id)
     since = high_water or since_default
-    # Add 1ms padding so we don't re-pull the same boundary post.
-    since_ms = datetime_to_ms(since) + (1 if high_water else 0)
+    # No padding: posts sharing the boundary millisecond are re-pulled and
+    # dropped by the upsert, rather than risk skipping an unseen one.
+    since_ms = datetime_to_ms(since)
     try:
         payload = await client.get_channel_posts_since(channel_id, since_ms)
     except MattermostAuthError as exc:

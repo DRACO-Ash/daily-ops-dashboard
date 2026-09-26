@@ -252,7 +252,34 @@ async def test_download_streams_stored_bytes_with_headers() -> None:
     assert response.status_code == 200
     assert response.content == payload
     assert response.headers["content-type"] == "application/pdf"
-    assert response.headers["content-disposition"] == 'attachment; filename="runbook.pdf"'
+    assert response.headers["content-disposition"] == (
+        "attachment; filename=\"runbook.pdf\"; filename*=UTF-8''runbook.pdf"
+    )
+
+
+async def test_download_escapes_quotes_and_non_ascii_in_filename() -> None:
+    proc = _procedure('ops "final" é.txt', "text/plain")
+    procedure_storage.write_file(proc.id, proc.filename, b"x")
+    _install(_session([_scalar(proc)]))
+
+    async with _client() as client:
+        response = await client.get(f"/api/v1/procedures/{proc.id}/download")
+
+    assert response.headers["content-disposition"] == (
+        'attachment; filename="ops _final_ _.txt"; '
+        "filename*=UTF-8''ops%20%22final%22%20%C3%A9.txt"
+    )
+
+
+async def test_download_missing_file_returns_404() -> None:
+    proc = _procedure("gone.pdf", "application/pdf")
+    _install(_session([_scalar(proc)]))
+
+    async with _client() as client:
+        response = await client.get(f"/api/v1/procedures/{proc.id}/download")
+
+    assert response.status_code == 404
+    assert response.json()["detail"] == "Procedure file not found"
 
 
 # Upload --------------------------------------------------------
@@ -285,6 +312,7 @@ async def test_upload_writes_file_persists_row_and_audits(
     assert len(stored) == 1
     assert stored[0].read_bytes() == data
     assert stored[0].suffix == ".md"
+    assert stored[0].name == f"{body['id']}.md"
     session.commit.assert_awaited_once()
     assert audit_calls[0]["action_type"] == "procedure.upload"
     assert audit_calls[0]["entity_id"] == body["id"]

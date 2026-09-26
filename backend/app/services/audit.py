@@ -31,6 +31,14 @@ async def write_audit(
     ip_address: Optional[str] = None,
     detail: Optional[dict[str, Any]] = None,
 ) -> AuditLog:
+    await db.execute(
+        text("SELECT pg_advisory_xact_lock(:k)"),
+        {"k": AUDIT_ADVISORY_LOCK_KEY},
+    )
+
+    # Taken under the lock and stored on the row, so timestamps follow
+    # chain order and every entry_hash can be recomputed from the row.
+    timestamp = datetime.now(timezone.utc)
     payload = {
         "action_type": action_type,
         "entity_type": entity_type,
@@ -38,14 +46,9 @@ async def write_audit(
         "user_id": str(user_id) if user_id is not None else None,
         "ip_address": ip_address,
         "detail": detail,
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": timestamp.isoformat(),
     }
     serialised = _serialise_payload(payload)
-
-    await db.execute(
-        text("SELECT pg_advisory_xact_lock(:k)"),
-        {"k": AUDIT_ADVISORY_LOCK_KEY},
-    )
 
     latest = await db.execute(
         select(AuditLog.entry_hash).order_by(AuditLog.timestamp.desc()).limit(1)
@@ -54,6 +57,7 @@ async def write_audit(
 
     entry_hash = _compute_entry_hash(previous_hash, serialised)
     entry = AuditLog(
+        timestamp=timestamp,
         action_type=action_type,
         entity_type=entity_type,
         entity_id=entity_id,

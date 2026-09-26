@@ -163,12 +163,16 @@ def frozen_now(monkeypatch) -> datetime:
         ("daily", datetime(2027, 1, 2, 9, 0, tzinfo=timezone.utc)),
         ("weekly", datetime(2027, 1, 8, 9, 0, tzinfo=timezone.utc)),
         ("monthly", datetime(2027, 2, 1, 9, 0, tzinfo=timezone.utc)),
-        ("none", datetime(2027, 1, 1, 9, 0, tzinfo=timezone.utc)),
     ],
 )
 def test_advance_steps_by_recurrence(recurrence: str, expected: datetime) -> None:
     start = datetime(2027, 1, 1, 9, 0, tzinfo=timezone.utc)
     assert timer_routes._advance(start, recurrence) == expected
+
+
+def test_advance_rejects_unknown_recurrence() -> None:
+    with pytest.raises(ValueError, match="Unknown recurrence"):
+        timer_routes._advance(datetime(2026, 1, 1, tzinfo=timezone.utc), "none")
 
 
 def test_advance_monthly_clamps_to_month_end() -> None:

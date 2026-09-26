@@ -1,5 +1,7 @@
 import hashlib
+import uuid
 from typing import Optional
+from urllib.parse import quote
 from uuid import UUID
 
 from fastapi import APIRouter, Depends, File, Form, HTTPException, Request, UploadFile, status
@@ -60,6 +62,15 @@ async def get_procedure(
     )
 
 
+def _content_disposition(filename: str) -> str:
+    """RFC 6266 attachment header: an ASCII-safe fallback plus the exact
+    name percent-encoded, so quotes or non-ASCII cannot break the header."""
+    fallback = "".join(
+        c if c.isascii() and c.isprintable() and c not in '"\\' else "_" for c in filename
+    )
+    return f"attachment; filename=\"{fallback}\"; filename*=UTF-8''{quote(filename, safe='')}"
+
+
 @router.get("/{procedure_id}/download")
 async def download_procedure(
     procedure_id: UUID,
@@ -71,7 +82,12 @@ async def download_procedure(
     ).scalar_one_or_none()
     if procedure is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Procedure not found")
-    data = read_file_bytes(procedure.id, procedure.filename)
+    try:
+        data = read_file_bytes(procedure.id, procedure.filename)
+    except FileNotFoundError:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="Procedure file not found"
+        ) from None
 
     def iterator():
         yield data
@@ -79,7 +95,7 @@ async def download_procedure(
     return StreamingResponse(
         iterator(),
         media_type=procedure.content_type,
-        headers={"Content-Disposition": f'attachment; filename="{procedure.filename}"'},
+        headers={"Content-Disposition": _content_disposition(procedure.filename)},
     )
 
 
@@ -100,7 +116,7 @@ async def upload_procedure(
         )
     if len(data) > MAX_UPLOAD_BYTES:
         raise HTTPException(
-            status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+            status_code=status.HTTP_413_CONTENT_TOO_LARGE,
             detail=f"File exceeds {MAX_UPLOAD_BYTES // (1024 * 1024)}MB limit",
         )
 
@@ -108,6 +124,8 @@ async def upload_procedure(
     file_hash = hashlib.sha256(data).hexdigest()
 
     procedure = Procedure(
+        # Assigned here, not at flush: the stored file is named after it.
+        id=uuid.uuid4(),
         name=name.strip(),
         description=description.strip() if description else None,
         filename=filename,
