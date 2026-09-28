@@ -73,7 +73,7 @@ export default function ProceduresPage() {
   }
 
   async function onDelete(id: string) {
-    if (!window.confirm("Delete this procedure? This cannot be undone.")) return;
+    if (!globalThis.confirm("Delete this procedure? This cannot be undone.")) return;
     setError(null);
     try {
       await deleteProcedure(id);

@@ -85,10 +85,10 @@ export default function Dashboard() {
   }, [load]);
 
   useEffect(() => {
-    const id = window.setInterval(() => {
+    const id = globalThis.setInterval(() => {
       load(false);
     }, REFRESH_INTERVAL_MS);
-    return () => window.clearInterval(id);
+    return () => globalThis.clearInterval(id);
   }, [load]);
 
   const buckets = feedBucketsByUrgency(items);

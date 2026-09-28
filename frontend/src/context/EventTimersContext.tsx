@@ -101,10 +101,10 @@ export function EventTimersProvider({ children }: { children: ReactNode }) {
 
   useEffect(() => {
     void refresh();
-    const id = window.setInterval(() => {
+    const id = globalThis.setInterval(() => {
       void refresh();
     }, POLL_INTERVAL_MS);
-    return () => window.clearInterval(id);
+    return () => globalThis.clearInterval(id);
   }, [refresh]);
 
   // First user gesture anywhere unlocks the AudioContext. We also keep
@@ -120,11 +120,11 @@ export function EventTimersProvider({ children }: { children: ReactNode }) {
           .catch(() => undefined);
       }
     }
-    window.addEventListener("click", onFirstInteraction, { once: true });
-    window.addEventListener("keydown", onFirstInteraction, { once: true });
+    globalThis.addEventListener("click", onFirstInteraction, { once: true });
+    globalThis.addEventListener("keydown", onFirstInteraction, { once: true });
     return () => {
-      window.removeEventListener("click", onFirstInteraction);
-      window.removeEventListener("keydown", onFirstInteraction);
+      globalThis.removeEventListener("click", onFirstInteraction);
+      globalThis.removeEventListener("keydown", onFirstInteraction);
     };
   }, []);
 
@@ -169,7 +169,7 @@ export function EventTimersProvider({ children }: { children: ReactNode }) {
   firingRef.current = firing;
   useEffect(() => {
     if (firing.length === 0) return;
-    const id = window.setInterval(() => {
+    const id = globalThis.setInterval(() => {
       const current = firingRef.current;
       if (current.length === 0) return;
       playFiring();
@@ -183,7 +183,7 @@ export function EventTimersProvider({ children }: { children: ReactNode }) {
         }
       }
     }, RECURRING_BEEP_INTERVAL_MS);
-    return () => window.clearInterval(id);
+    return () => globalThis.clearInterval(id);
   }, [firing.length]);
 
   // Also play once the moment a timer first transitions into firing,

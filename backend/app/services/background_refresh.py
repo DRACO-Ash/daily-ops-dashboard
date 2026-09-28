@@ -8,9 +8,10 @@ with its own cadence:
   and the event-summary phase (3-sentence evolution narrative per
   logical event).
 ● maneuvers — every 10 minutes, 48h window from UDL. Pull only.
-● mattermost — every 60 seconds from configured chat channels.
-  Pull only; messages flow into the assistant prompt at evaluation
-  time alongside notifications and maneuvers.
+● mattermost — every 60 seconds, runs only work an operator asked
+  for: full-history jobs whose start time has passed, and saved asks
+  that are due. Nothing is pulled continuously. Archived posts flow
+  into the assistant prompt alongside notifications and maneuvers.
 
 Elset auto-pulling was removed because the operator wasn't using
 the data; the backend route/model/table remain for recoverability.
@@ -35,7 +36,8 @@ from app.models.notification import Notification
 from app.services.assistant import evaluate_notification, is_persistent_anthropic_failure
 from app.services.event_summary import compute_event_key, generate_event_summary
 from app.services.maneuver_ingest import ingest_maneuvers
-from app.services.mattermost_ingest import ingest_mattermost_messages
+from app.services.mattermost_asks import run_due_asks
+from app.services.mattermost_ingest import run_history_jobs
 from app.services.notification_ingest import ingest_notifications
 from app.services.notification_query import aliased_deduped_notifications
 from app.services.udl_client import UDLAuthError, UDLClient, UDLClientError
@@ -209,11 +211,13 @@ async def _notification_cycle() -> None:
 
 async def _pull_mattermost_once() -> None:
     factory = get_session_factory()
-    try:
-        async with factory() as db:
-            await ingest_mattermost_messages(db)
-    except Exception:
-        logger.exception("Mattermost ingest crashed unexpectedly")
+    phases = (("history jobs", run_history_jobs), ("asks", run_due_asks))
+    for name, phase in phases:
+        try:
+            async with factory() as db:
+                await phase(db)
+        except Exception:
+            logger.exception("Mattermost %s crashed unexpectedly", name)
 
 
 # Maneuvers ------------------------------------------------------

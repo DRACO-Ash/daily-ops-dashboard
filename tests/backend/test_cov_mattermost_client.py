@@ -309,3 +309,62 @@ async def test_pause_uses_the_injected_sleep() -> None:
     async with _client(lambda r: httpx.Response(200, json={}), sleeps) as mm:
         await mm.pause()
     assert sleeps == [PAGE_PAUSE_S]
+
+
+async def test_search_team_posts_sends_the_search_body() -> None:
+    seen: list[httpx.Request] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(request)
+        return httpx.Response(200, json={"order": [], "posts": {}})
+
+    async with _client(handler, []) as mm:
+        await mm.search_team_posts(
+            "t1", '"Verified solve" from:fusion', is_or_search=False, include_archived=True, page=2
+        )
+    assert (seen[0].method, seen[0].url.path) == ("POST", "/api/v4/teams/t1/posts/search")
+    assert httpx.Response(200, content=seen[0].content).json() == {
+        "terms": '"Verified solve" from:fusion',
+        "is_or_search": False,
+        "time_zone_offset": 0,
+        "include_deleted_channels": True,
+        "page": 2,
+        "per_page": 100,
+    }
+
+
+async def test_lookup_endpoints_hit_expected_paths() -> None:
+    seen: list[str] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        seen.append(f"{request.method} {request.url.path}?{request.url.query.decode()}")
+        if request.url.path.endswith("/usernames"):
+            return httpx.Response(200, json=[{"username": "a"}, "junk"])
+        if request.url.path.endswith("/users/search"):
+            return httpx.Response(200, json={"not": "a list"})
+        return httpx.Response(200, json={"id": "x"})
+
+    async with _client(handler, []) as mm:
+        assert await mm.get_post("p1") == {"id": "x"}
+        assert await mm.get_channel_by_name("t1", " JCO_DOK ") == {"id": "x"}
+        assert await mm.get_users_by_usernames(["a"]) == [{"username": "a"}]
+        assert await mm.search_users("sellick") == []
+    assert seen == [
+        "GET /api/v4/posts/p1?",
+        "GET /api/v4/teams/t1/channels/name/jco_dok?include_deleted=true",
+        "POST /api/v4/users/usernames?",
+        "POST /api/v4/users/search?",
+    ]
+
+
+async def test_search_users_scopes_to_team_when_given() -> None:
+    bodies: list[dict] = []
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        bodies.append(httpx.Response(200, content=request.content).json())
+        return httpx.Response(200, json=[{"username": "m"}])
+
+    async with _client(handler, []) as mm:
+        assert await mm.search_users("m", "t1") == [{"username": "m"}]
+        await mm.get_users_by_usernames([])
+    assert bodies[0] == {"term": "m", "allow_inactive": True, "limit": 20, "team_id": "t1"}

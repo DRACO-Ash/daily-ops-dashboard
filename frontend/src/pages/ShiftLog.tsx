@@ -71,7 +71,7 @@ function NoteRow({ note, onSaved, onDeleted, onError }: NoteRowProps) {
   }
 
   async function onDelete() {
-    if (!window.confirm("Delete this entry?")) return;
+    if (!globalThis.confirm("Delete this entry?")) return;
     setBusy(true);
     try {
       await deleteShiftNote(note.id);

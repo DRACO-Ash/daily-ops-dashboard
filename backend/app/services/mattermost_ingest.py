@@ -1,37 +1,34 @@
-"""Pull Mattermost channels into a local archive.
+"""Mattermost archive storage and on-demand full-history pulls.
 
-Channels: `MATTERMOST_CHANNEL_IDS` if set, otherwise every open or
-private channel the bot (dok.bot) belongs to in `MATTERMOST_TEAM`.
+Nothing is pulled continuously. Posts reach the archive in two ways:
 
-Per channel, each cycle:
-1. Incremental: ask for posts created or modified since the channel's
-   watermark (the highest `update_at` stored). New posts insert; edits
-   replace the stored text only when newer; deletions set `deleted_at`
-   and keep the last known text (archive, never delete).
-2. Backfill: until the whole history is stored, walk backwards from the
-   oldest post reached, up to `MATTERMOST_BACKFILL_PAGES_PER_CYCLE`
-   pages. The first cycle for a channel therefore takes the full history.
+● Asks (services/mattermost_asks.py) store the posts they match.
+● A full-history job pulls every post from chosen channels (or all the
+  bot's channels in MATTERMOST_TEAM) starting at a time the operator
+  picks. Each background cycle walks each channel backwards from the
+  oldest post reached, up to MATTERMOST_BACKFILL_PAGES_PER_CYCLE pages,
+  so a large channel completes over several cycles.
 
-System messages and blank posts are skipped. Author names are looked up
-in batches and cached for the cycle.
-
+Archive semantics, shared by both: edits replace the stored text only
+when newer; deletions set `deleted_at` and keep the last known text.
 Ported from the standalone `mattermost_channel_pull` tool.
 """
 
 import logging
-from dataclasses import dataclass, field
+from dataclasses import asdict, dataclass, field
+from datetime import datetime, timezone
 from typing import Any, Optional
 
-from sqlalchemy import func, literal_column, update
+from sqlalchemy import func, literal_column, select, update
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import settings
+from app.models.mattermost_ask import MattermostHistoryJob
 from app.models.mattermost_message import MattermostChannelState, MattermostMessage
 from app.services.audit import write_audit
 from app.services.mattermost_client import (
     PER_PAGE,
-    MattermostAuthError,
     MattermostClient,
     MattermostClientError,
     ms_to_datetime,
@@ -40,91 +37,80 @@ from app.services.mattermost_client import (
 logger = logging.getLogger(__name__)
 
 # O is public, P is private. D and G (direct and group messages) are not
-# team channels and are never ingested.
+# team channels and are never pulled.
 PULLABLE_TYPES = ("O", "P")
+ACTIVE_JOB_STATUSES = ("scheduled", "running")
 
 
 @dataclass
-class MattermostIngestResult:
-    channels_polled: int
-    channels_failed: int
-    pulled: int
-    inserted: int
-    skipped: int
-    updated: int = 0
-    deleted: int = 0
-
-
-@dataclass
-class _Tally:
-    channels_polled: int = 0
-    channels_failed: int = 0
+class Tally:
     pulled: int = 0
     inserted: int = 0
     updated: int = 0
     deleted: int = 0
     skipped: int = 0
 
-    def result(self) -> MattermostIngestResult:
-        return MattermostIngestResult(
-            channels_polled=self.channels_polled,
-            channels_failed=self.channels_failed,
-            pulled=self.pulled,
-            inserted=self.inserted,
-            skipped=self.skipped,
-            updated=self.updated,
-            deleted=self.deleted,
-        )
+    def add_to(self, counts: dict[str, int]) -> dict[str, int]:
+        merged = dict(counts)
+        for key, value in asdict(self).items():
+            merged[key] = merged.get(key, 0) + value
+        return merged
 
 
 @dataclass
-class _Channel:
+class Channel:
     id: str
     name: Optional[str]
+    archived: bool = False
 
 
 @dataclass
-class _Cycle:
-    """Everything one ingest cycle shares across channels."""
+class Cycle:
+    """State shared by one pass over Mattermost."""
 
     db: AsyncSession
     client: MattermostClient
-    tally: _Tally = field(default_factory=_Tally)
+    tally: Tally = field(default_factory=Tally)
     names: dict[str, Optional[str]] = field(default_factory=dict)
 
 
-def _configured_channel_ids() -> list[str]:
-    raw = settings.mattermost_channel_ids or ""
-    return [c.strip() for c in raw.split(",") if c.strip()]
+# Channels ---------------------------------------------------------------------
 
 
-def selectable_channels(channels: list[dict[str, Any]]) -> list[_Channel]:
+def channel_from_api(raw: dict[str, Any]) -> Channel:
+    return Channel(
+        id=str(raw["id"]),
+        name=raw.get("display_name") or raw.get("name") or None,
+        archived=bool(raw.get("delete_at")),
+    )
+
+
+def selectable_channels(channels: list[dict[str, Any]]) -> list[Channel]:
     """Open and private team channels that are not archived."""
     return [
-        _Channel(id=str(c["id"]), name=c.get("display_name") or c.get("name") or None)
+        channel_from_api(c)
         for c in channels
         if c.get("id") and c.get("type") in PULLABLE_TYPES and not c.get("delete_at")
     ]
 
 
-async def _channel_name(client: MattermostClient, channel_id: str) -> Optional[str]:
-    try:
-        channel = await client.get_channel(channel_id)
-    except MattermostClientError:
-        return None
-    return channel.get("display_name") or channel.get("name") or None
+async def team_id(client: MattermostClient) -> str:
+    if settings.mattermost_team_id:
+        return settings.mattermost_team_id
+    if not settings.mattermost_team:
+        raise MattermostClientError("MATTERMOST_TEAM is not configured")
+    return await client.get_team_id(settings.mattermost_team)
 
 
-async def _resolve_channels(client: MattermostClient) -> list[_Channel]:
-    configured = _configured_channel_ids()
-    if configured:
-        return [_Channel(id=cid, name=await _channel_name(client, cid)) for cid in configured]
-    # _is_configured() guarantees a team id or name when no ids are set.
-    team_id = settings.mattermost_team_id or await client.get_team_id(settings.mattermost_team)
-    return selectable_channels(await client.get_my_team_channels(team_id))
+async def bot_channels(client: MattermostClient) -> list[Channel]:
+    """Every live open or private channel the bot belongs to in the team."""
+    return selectable_channels(await client.get_my_team_channels(await team_id(client)))
 
 
-def _is_ingestible(post: dict[str, Any]) -> bool:
+# Storage ----------------------------------------------------------------------
+
+
+def is_ingestible(post: dict[str, Any]) -> bool:
     """Skip system messages, posts without a timestamp, and blank posts."""
     if (post.get("type") or "").startswith("system_"):
         return False
@@ -137,18 +123,18 @@ def _is_deleted(post: dict[str, Any]) -> bool:
     return bool(post.get("delete_at"))
 
 
-def _page_posts(payload: dict[str, Any]) -> list[dict[str, Any]]:
+def page_posts(payload: dict[str, Any]) -> list[dict[str, Any]]:
     """Posts in the page's `order` (newest first), dropping dangling ids."""
     posts: dict[str, dict[str, Any]] = payload.get("posts") or {}
     order: list[str] = payload.get("order") or []
     return [posts[pid] for pid in order if isinstance(posts.get(pid), dict)]
 
 
-def _ms_or_none(value: Any) -> Optional[Any]:
+def _ms_or_none(value: Any) -> Optional[datetime]:
     return ms_to_datetime(value) if isinstance(value, int) and value > 0 else None
 
 
-def _post_row(channel: _Channel, post: dict[str, Any], names: dict[str, Optional[str]]) -> dict:
+def _post_row(channel: Channel, post: dict[str, Any], names: dict[str, Optional[str]]) -> dict:
     user_id = post.get("user_id") or ""
     return {
         "mm_post_id": post.get("id"),
@@ -166,7 +152,8 @@ def _post_row(channel: _Channel, post: dict[str, Any], names: dict[str, Optional
     }
 
 
-async def _resolve_names(cycle: _Cycle, posts: list[dict[str, Any]]) -> None:
+async def resolve_names(cycle: Cycle, posts: list[dict[str, Any]]) -> None:
+    """Fill `cycle.names` for every author in `posts`, in batched lookups."""
     unknown = sorted({p.get("user_id") or "" for p in posts} - set(cycle.names) - {""})
     if not unknown:
         return
@@ -176,9 +163,9 @@ async def _resolve_names(cycle: _Cycle, posts: list[dict[str, Any]]) -> None:
         cycle.names.setdefault(user_id, None)
 
 
-async def _upsert(cycle: _Cycle, channel: _Channel, posts: list[dict[str, Any]]) -> None:
+async def _upsert(cycle: Cycle, channel: Channel, posts: list[dict[str, Any]]) -> None:
     """Insert new posts; replace stored ones only with a newer revision."""
-    await _resolve_names(cycle, posts)
+    await resolve_names(cycle, posts)
     rows = [_post_row(channel, p, cycle.names) for p in posts]
     insert = pg_insert(MattermostMessage).values(rows)
     excluded = insert.excluded
@@ -201,7 +188,7 @@ async def _upsert(cycle: _Cycle, channel: _Channel, posts: list[dict[str, Any]])
     cycle.tally.updated += len(flags) - inserted
 
 
-async def _mark_deleted(cycle: _Cycle, posts: list[dict[str, Any]]) -> None:
+async def _mark_deleted(cycle: Cycle, posts: list[dict[str, Any]]) -> None:
     """Flag stored posts as deleted; the stored text is kept."""
     for post in posts:
         result = await cycle.db.execute(
@@ -215,10 +202,11 @@ async def _mark_deleted(cycle: _Cycle, posts: list[dict[str, Any]]) -> None:
         cycle.tally.deleted += result.rowcount or 0
 
 
-async def _store(cycle: _Cycle, channel: _Channel, posts: list[dict[str, Any]]) -> None:
+async def store_posts(cycle: Cycle, channel: Channel, posts: list[dict[str, Any]]) -> None:
+    """Archive `posts` from one channel."""
     cycle.tally.pulled += len(posts)
     deleted = [p for p in posts if _is_deleted(p)]
-    live = [p for p in posts if not _is_deleted(p) and _is_ingestible(p)]
+    live = [p for p in posts if not _is_deleted(p) and is_ingestible(p)]
     cycle.tally.skipped += len(posts) - len(deleted) - len(live)
     if live:
         await _upsert(cycle, channel, live)
@@ -231,115 +219,149 @@ def _highest_update(posts: list[dict[str, Any]], current: int) -> int:
     return max([current, *[s for s in stamps if isinstance(s, int)]])
 
 
-async def _load_state(db: AsyncSession, channel: _Channel) -> MattermostChannelState:
+# Full-history jobs --------------------------------------------------------------
+
+
+async def _load_state(db: AsyncSession, channel: Channel) -> MattermostChannelState:
     state = await db.get(MattermostChannelState, channel.id)
     if state is None:
         state = MattermostChannelState(
             channel_id=channel.id, watermark_ms=0, backfill_complete=False
         )
         db.add(state)
-    state.channel_name = channel.name
+    if channel.name:
+        state.channel_name = channel.name
     return state
 
 
-async def _pull_incremental(
-    cycle: _Cycle, channel: _Channel, state: MattermostChannelState
-) -> None:
-    if not state.watermark_ms:
-        return
-    # `since` is exclusive; step back 1ms so a post revised in the same
-    # millisecond as the watermark is not missed. The upsert ignores the
-    # re-pulled revision it already holds.
-    payload = await cycle.client.get_channel_posts_since(channel.id, state.watermark_ms - 1)
-    posts = _page_posts(payload)
-    await _store(cycle, channel, posts)
-    state.watermark_ms = _highest_update(posts, state.watermark_ms)
-
-
-async def _pull_backfill(cycle: _Cycle, channel: _Channel, state: MattermostChannelState) -> None:
+async def _pull_history_pages(cycle: Cycle, channel: Channel) -> bool:
+    """Advance one channel's history walk. Returns True once complete."""
+    state = await _load_state(cycle.db, channel)
     for _ in range(max(1, settings.mattermost_backfill_pages_per_cycle)):
         if state.backfill_complete:
-            return
+            return True
         payload = await cycle.client.get_channel_posts_before(channel.id, state.backfill_cursor)
-        posts = _page_posts(payload)
-        await _store(cycle, channel, posts)
+        posts = page_posts(payload)
+        await store_posts(cycle, channel, posts)
         state.watermark_ms = _highest_update(posts, state.watermark_ms)
         if posts:
             state.backfill_cursor = str(posts[-1].get("id"))
         if len(payload.get("order") or []) < PER_PAGE:
             state.backfill_complete = True
-            return
+            return True
         await cycle.client.pause()
+    return state.backfill_complete
 
 
-async def _ingest_channel(cycle: _Cycle, channel: _Channel) -> None:
-    state = await _load_state(cycle.db, channel)
-    try:
-        await _pull_incremental(cycle, channel, state)
-        await _pull_backfill(cycle, channel, state)
-    except MattermostAuthError as exc:
-        logger.warning("Mattermost channel %s skipped: %s", channel.id, exc)
-        cycle.tally.channels_failed += 1
-        return
-    except MattermostClientError as exc:
-        logger.warning("Mattermost channel %s failed: %s", channel.id, exc)
-        cycle.tally.channels_failed += 1
-        return
-    cycle.tally.channels_polled += 1
-
-
-async def _run_cycle(db: AsyncSession, channel_ids: Optional[list[str]]) -> _Tally:
-    tally = _Tally()
-    try:
-        async with MattermostClient() as client:
-            cycle = _Cycle(db=db, client=client, tally=tally)
-            channels = (
-                [_Channel(id=cid, name=await _channel_name(client, cid)) for cid in channel_ids]
-                if channel_ids is not None
-                else await _resolve_channels(client)
-            )
-            for channel in channels:
-                await _ingest_channel(cycle, channel)
-    except MattermostClientError as exc:
-        logger.warning("Mattermost ingest aborted: %s", exc)
-        tally.channels_failed += 1
-    return tally
-
-
-def _is_configured() -> bool:
-    return bool(
-        settings.mattermost_channel_ids or settings.mattermost_team or settings.mattermost_team_id
+async def _start_job(cycle: Cycle, job: MattermostHistoryJob) -> None:
+    """Resolve the job's channels and restart their history walks."""
+    if not job.channel_ids:
+        job.channel_ids = [c.id for c in await bot_channels(cycle.client)]
+    for channel_id in job.channel_ids:
+        state = await _load_state(cycle.db, Channel(id=channel_id, name=None))
+        state.backfill_complete = False
+        state.backfill_cursor = None
+    job.status = "running"
+    job.started_at = datetime.now(timezone.utc)
+    await write_audit(
+        cycle.db,
+        action_type="mattermost.history.start",
+        entity_type="mattermost_history_job",
+        entity_id=str(job.id),
+        user_id=job.requested_by,
+        detail={"channel_ids": job.channel_ids},
     )
 
 
-async def ingest_mattermost_messages(
-    db: AsyncSession,
-    *,
-    channel_ids: Optional[list[str]] = None,
-    user_id_actor: Optional[Any] = None,
-    ip_address: Optional[str] = None,
-) -> MattermostIngestResult:
-    if channel_ids == [] or (channel_ids is None and not _is_configured()):
-        return MattermostIngestResult(0, 0, 0, 0, 0)
+async def _channel_names(cycle: Cycle, channel_ids: list[str]) -> dict[str, Optional[str]]:
+    names: dict[str, Optional[str]] = {}
+    for channel_id in channel_ids:
+        try:
+            raw = await cycle.client.get_channel(channel_id)
+        except MattermostClientError:
+            names[channel_id] = None
+            continue
+        names[channel_id] = channel_from_api(raw).name
+    return names
 
-    summary = (await _run_cycle(db, channel_ids)).result()
 
-    if summary.channels_polled or summary.channels_failed:
-        await write_audit(
-            db,
-            action_type="mattermost.ingest",
-            entity_type="mattermost_ingest_run",
-            user_id=user_id_actor,
-            ip_address=ip_address,
-            detail={
-                "channels_polled": summary.channels_polled,
-                "channels_failed": summary.channels_failed,
-                "pulled": summary.pulled,
-                "inserted": summary.inserted,
-                "updated": summary.updated,
-                "deleted": summary.deleted,
-                "skipped": summary.skipped,
-            },
+async def _advance_job(cycle: Cycle, job: MattermostHistoryJob) -> bool:
+    """One cycle of work on a running job. Returns True when finished."""
+    pending = [c for c in job.channel_ids if c not in job.failed_channel_ids]
+    names = await _channel_names(cycle, pending)
+    finished = True
+    for channel_id in pending:
+        try:
+            done = await _pull_history_pages(cycle, Channel(id=channel_id, name=names[channel_id]))
+        except MattermostClientError as exc:
+            logger.warning("History pull for channel %s failed: %s", channel_id, exc)
+            job.failed_channel_ids = [*job.failed_channel_ids, channel_id]
+            job.error = f"{channel_id}: {exc}"
+            continue
+        finished = finished and done
+    return finished
+
+
+async def _finish_job(cycle: Cycle, job: MattermostHistoryJob, status: str) -> None:
+    job.status = status
+    job.finished_at = datetime.now(timezone.utc)
+    await write_audit(
+        cycle.db,
+        action_type="mattermost.history.finish",
+        entity_type="mattermost_history_job",
+        entity_id=str(job.id),
+        user_id=job.requested_by,
+        detail={
+            "status": status,
+            "counts": job.counts,
+            "failed_channel_ids": job.failed_channel_ids,
+        },
+    )
+
+
+async def _run_job(cycle: Cycle, job: MattermostHistoryJob) -> None:
+    if job.status == "scheduled":
+        await _start_job(cycle, job)
+    cycle.tally = Tally()
+    finished = await _advance_job(cycle, job)
+    job.counts = cycle.tally.add_to(job.counts)
+    if finished:
+        all_failed = len(job.failed_channel_ids) == len(job.channel_ids) > 0
+        await _finish_job(cycle, job, "failed" if all_failed else "done")
+
+
+async def run_history_jobs(db: AsyncSession) -> int:
+    """Advance every due history job by one cycle. Returns jobs touched."""
+    now = datetime.now(timezone.utc)
+    jobs = list(
+        (
+            await db.execute(
+                select(MattermostHistoryJob)
+                .where(
+                    MattermostHistoryJob.status.in_(ACTIVE_JOB_STATUSES),
+                    MattermostHistoryJob.run_after <= now,
+                )
+                .order_by(MattermostHistoryJob.run_after)
+            )
         )
-    await db.commit()
-    return summary
+        .scalars()
+        .all()
+    )
+    if not jobs:
+        return 0
+    try:
+        async with MattermostClient() as client:
+            for job in jobs:
+                await _run_job(Cycle(db=db, client=client), job)
+                await db.commit()
+    except MattermostClientError as exc:
+        # An HTTP-level failure (unconfigured, team not found) leaves the
+        # session usable, so progress already made is kept.
+        logger.warning("Mattermost history jobs aborted: %s", exc)
+        for job in jobs:
+            if job.status in ACTIVE_JOB_STATUSES:
+                job.status = "failed"
+                job.error = str(exc)
+                job.finished_at = datetime.now(timezone.utc)
+        await db.commit()
+    return len(jobs)

@@ -1,145 +1,58 @@
-import { FormEvent, useCallback, useEffect, useState } from "react";
-import { listMattermostMessages } from "../api/mattermost";
-import type { MattermostMessage } from "../types";
+import { useSearchParams } from "react-router-dom";
+import AsksTab from "../components/mattermost/AsksTab";
+import HistoryTab from "../components/mattermost/HistoryTab";
+import MessagesTab from "../components/mattermost/MessagesTab";
+import { useMattermostChannels } from "../components/mattermost/useMattermostChannels";
+import { useAuth } from "../context/AuthContext";
+import { canWrite } from "../utils/mattermostAsk";
 
-const PAGE_SIZE = 100;
+type TabKey = "asks" | "history" | "messages";
 
-function formatDateTime(value: string): string {
-  return new Date(value).toISOString().replace("T", " ").slice(0, 19);
-}
+const TABS: ReadonlyArray<{ key: TabKey; label: string }> = [
+  { key: "asks", label: "Asks" },
+  { key: "history", label: "Full history" },
+  { key: "messages", label: "Messages" },
+];
 
-function extractErrorMessage(err: unknown, fallback: string): string {
-  if (err && typeof err === "object" && "response" in err) {
-    const response = (err as { response?: { data?: { detail?: unknown } } }).response;
-    const detail = response?.data?.detail;
-    if (typeof detail === "string") return detail;
-  }
-  if (err instanceof Error) return err.message;
-  return fallback;
+function parseTab(value: string | null): TabKey {
+  const found = TABS.find((t) => t.key === value);
+  return found ? found.key : "asks";
 }
 
 export default function MattermostPage() {
-  const [items, setItems] = useState<MattermostMessage[]>([]);
-  const [total, setTotal] = useState(0);
-  const [offset, setOffset] = useState(0);
-  const [channelFilter, setChannelFilter] = useState<string | undefined>(undefined);
-  const [channelInput, setChannelInput] = useState("");
-  const [reloadToken, setReloadToken] = useState(0);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const load = useCallback(async () => {
-    setLoading(true);
-    setError(null);
-    try {
-      const page = await listMattermostMessages({
-        channel_id: channelFilter,
-        limit: PAGE_SIZE,
-        offset,
-      });
-      setItems(page.items);
-      setTotal(page.total);
-    } catch (err) {
-      setError(extractErrorMessage(err, "Failed to load Mattermost messages."));
-    } finally {
-      setLoading(false);
-    }
-  }, [channelFilter, offset]);
-
-  useEffect(() => {
-    load();
-  }, [load, reloadToken]);
-
-  function onFilterSubmit(event: FormEvent) {
-    event.preventDefault();
-    const trimmed = channelInput.trim();
-    setChannelFilter(trimmed === "" ? undefined : trimmed);
-    setOffset(0);
-  }
-
-  const currentPage = Math.floor(offset / PAGE_SIZE) + 1;
-  const totalPages = Math.max(1, Math.ceil(total / PAGE_SIZE));
+  const [searchParams, setSearchParams] = useSearchParams();
+  const tab = parseTab(searchParams.get("tab"));
+  const { user } = useAuth();
+  const writer = canWrite(user?.role);
+  const channels = useMattermostChannels();
 
   return (
     <div>
       <h1>Comms</h1>
       <p className="muted-paragraph">
-        Recent messages pulled from the configured Mattermost channels. The assistant uses these as
-        soft context when evaluating each NOTSO.
+        Mattermost posts are pulled only by saved asks and by full history pulls you schedule.
       </p>
+      {!writer && (
+        <p className="muted">Read only: operators and admins can create, run and schedule pulls.</p>
+      )}
 
-      <section className="card">
-        <form onSubmit={onFilterSubmit} className="filter-form">
-          <label>
-            Channel ID (filter)
-            <input
-              type="text"
-              value={channelInput}
-              onChange={(e) => setChannelInput(e.target.value)}
-              placeholder="Mattermost channel ID"
-            />
-          </label>
-          <button type="submit">Apply</button>
+      <nav className="tab-bar" aria-label="Comms views">
+        {TABS.map((t) => (
           <button
+            key={t.key}
             type="button"
-            onClick={() => {
-              setChannelInput("");
-              setChannelFilter(undefined);
-              setOffset(0);
-            }}
+            className={t.key === tab ? "tab-button active" : "tab-button"}
+            aria-current={t.key === tab ? "page" : undefined}
+            onClick={() => setSearchParams(t.key === "asks" ? {} : { tab: t.key })}
           >
-            Clear
+            {t.label}
           </button>
-          <button type="button" onClick={() => setReloadToken((t) => t + 1)}>
-            Refresh
-          </button>
-        </form>
+        ))}
+      </nav>
 
-        {error && <div className="form-error">{error}</div>}
-        {loading && <div>Loading...</div>}
-
-        {!loading && items.length === 0 && (
-          <p className="muted">
-            No messages yet. Set <code>MATTERMOST_TEAM</code> to ingest every channel the bot
-            belongs to, or <code>MATTERMOST_CHANNEL_IDS</code> for specific channels.
-          </p>
-        )}
-
-        <ul className="comms-list">
-          {items.map((m) => (
-            <li key={m.id} className="comms-item">
-              <div className="comms-head">
-                <span className="comms-channel">#{m.channel_name ?? m.channel_id}</span>
-                <span className="comms-author">@{m.user_display_name ?? m.user_id}</span>
-                <span className="comms-time">{formatDateTime(m.posted_at)}</span>
-                {m.root_id && <span className="muted">reply</span>}
-                {m.edited_at && <span className="muted">edited</span>}
-              </div>
-              <p className="comms-body">{m.message}</p>
-            </li>
-          ))}
-        </ul>
-
-        <div className="pagination">
-          <span>
-            {total} total &middot; page {currentPage} of {totalPages}
-          </span>
-          <button
-            type="button"
-            disabled={offset === 0}
-            onClick={() => setOffset(Math.max(0, offset - PAGE_SIZE))}
-          >
-            Previous
-          </button>
-          <button
-            type="button"
-            disabled={offset + PAGE_SIZE >= total}
-            onClick={() => setOffset(offset + PAGE_SIZE)}
-          >
-            Next
-          </button>
-        </div>
-      </section>
+      {tab === "asks" && <AsksTab canWrite={writer} channels={channels} />}
+      {tab === "history" && <HistoryTab canWrite={writer} channels={channels} />}
+      {tab === "messages" && <MessagesTab />}
     </div>
   );
 }

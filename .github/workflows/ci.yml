@@ -21,7 +21,7 @@ jobs:
           python-version: "3.11"
       - run: pip install -r backend/requirements-dev.txt
       - run: python tools/sniff_check.py --self-test > /dev/null
-      - run: python tools/sniff_check.py backend migrations tests tools frontend/index.html
+      - run: python tools/sniff_check.py backend migrations tests tools frontend/index.html frontend/src
       - run: ruff check backend/app tests
       - run: mypy backend/app
       - run: bandit -r backend/app -ll

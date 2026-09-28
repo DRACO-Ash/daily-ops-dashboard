@@ -33,6 +33,7 @@ MAX_ATTEMPTS = 4
 PER_PAGE = 200  # API maximum for the posts and channels endpoints
 USER_BATCH = 100  # user ids per /users/ids call
 PAGE_PAUSE_S = 0.5  # courtesy pause between history pages
+SEARCH_PER_PAGE = 100
 
 
 def retry_delay(attempt: int, retry_after: Optional[str]) -> float:
@@ -182,6 +183,57 @@ class MattermostClient:
         if before:
             params["before"] = before
         return await self._get_json(f"/channels/{channel_id}/posts", params=params)
+
+    async def get_users_by_usernames(self, usernames: list[str]) -> list[dict[str, Any]]:
+        found = await self._json("POST", "/users/usernames", json=usernames)
+        return [u for u in found if isinstance(u, dict)] if isinstance(found, list) else []
+
+    async def search_users(self, term: str, team_id: Optional[str] = None) -> list[dict[str, Any]]:
+        """People search by name, username or nickname (for picking authors)."""
+        body: dict[str, Any] = {"term": term, "allow_inactive": True, "limit": 20}
+        if team_id:
+            body["team_id"] = team_id
+        found = await self._json("POST", "/users/search", json=body)
+        return [u for u in found if isinstance(u, dict)] if isinstance(found, list) else []
+
+    async def get_post(self, post_id: str) -> dict[str, Any]:
+        return await self._get_json(f"/posts/{post_id}")
+
+    async def get_channel_by_name(self, team_id: str, name: str) -> dict[str, Any]:
+        """Resolve a channel URL name in a team, archived channels included."""
+        return await self._get_json(
+            f"/teams/{team_id}/channels/name/{quote(name.strip().lower(), safe='')}",
+            params={"include_deleted": "true"},
+        )
+
+    async def search_team_posts(
+        self,
+        team_id: str,
+        terms: str,
+        *,
+        is_or_search: bool,
+        include_archived: bool,
+        page: int,
+        per_page: int = SEARCH_PER_PAGE,
+    ) -> dict[str, Any]:
+        """Server-side post search in one team, newest first.
+
+        Only channels the bot is a member of are searched. With
+        `include_archived`, archived channels are searched too (the server
+        must allow viewing archived channels).
+        """
+        return await self._json(
+            "POST",
+            f"/teams/{team_id}/posts/search",
+            json={
+                "terms": terms,
+                "is_or_search": is_or_search,
+                "time_zone_offset": 0,
+                "include_deleted_channels": include_archived,
+                "page": page,
+                "per_page": per_page,
+            },
+        )
 
     async def pause(self) -> None:
         """Courtesy pause between consecutive history pages."""

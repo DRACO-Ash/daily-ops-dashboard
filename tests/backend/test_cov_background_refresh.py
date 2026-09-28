@@ -182,27 +182,37 @@ async def test_pull_maneuvers_swallows_errors(
 # Mattermost pull ---------------------------------------------------
 
 
-async def test_pull_mattermost_ingests_with_session(monkeypatch: pytest.MonkeyPatch) -> None:
+async def test_pull_mattermost_runs_history_jobs_then_asks(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
     factory = _Factory()
     _install_factory(monkeypatch, factory)
-    ingest = AsyncMock()
-    monkeypatch.setattr(br, "ingest_mattermost_messages", ingest)
+    order: list[str] = []
+    history = AsyncMock(side_effect=lambda db: order.append("history"))
+    asks = AsyncMock(side_effect=lambda db: order.append("asks"))
+    monkeypatch.setattr(br, "run_history_jobs", history)
+    monkeypatch.setattr(br, "run_due_asks", asks)
 
     await br._pull_mattermost_once()
 
-    ingest.assert_awaited_once_with(factory.sessions[0])
+    assert order == ["history", "asks"]
+    history.assert_awaited_once_with(factory.sessions[0])
+    asks.assert_awaited_once_with(factory.sessions[1])  # a fresh session per phase
 
 
-async def test_pull_mattermost_swallows_crash(
+async def test_pull_mattermost_crash_in_one_phase_does_not_stop_the_other(
     monkeypatch: pytest.MonkeyPatch, caplog: pytest.LogCaptureFixture
 ) -> None:
     _install_factory(monkeypatch, _Factory())
-    monkeypatch.setattr(br, "ingest_mattermost_messages", AsyncMock(side_effect=OSError("db")))
+    monkeypatch.setattr(br, "run_history_jobs", AsyncMock(side_effect=OSError("db")))
+    asks = AsyncMock()
+    monkeypatch.setattr(br, "run_due_asks", asks)
 
     with caplog.at_level(logging.ERROR, logger=br.__name__):
         await br._pull_mattermost_once()
 
-    assert any("Mattermost ingest crashed" in r.getMessage() for r in caplog.records)
+    assert any("Mattermost history jobs crashed" in r.getMessage() for r in caplog.records)
+    asks.assert_awaited_once()
 
 
 # Auto-evaluate -----------------------------------------------------

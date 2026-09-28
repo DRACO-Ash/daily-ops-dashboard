@@ -6,12 +6,12 @@ const COLLAPSE_STORAGE_KEY = "ops-dashboard.event-timers.collapsed";
 
 function loadCollapsed(): boolean {
   if (typeof window === "undefined") return false;
-  return window.localStorage.getItem(COLLAPSE_STORAGE_KEY) === "1";
+  return globalThis.localStorage.getItem(COLLAPSE_STORAGE_KEY) === "1";
 }
 
 function saveCollapsed(value: boolean): void {
   if (typeof window === "undefined") return;
-  window.localStorage.setItem(COLLAPSE_STORAGE_KEY, value ? "1" : "0");
+  globalThis.localStorage.setItem(COLLAPSE_STORAGE_KEY, value ? "1" : "0");
 }
 
 function toIsoUtc(local: string): string {
@@ -57,7 +57,7 @@ function TimerRow({ timer, variant }: TimerRowProps) {
   }
 
   async function onDelete() {
-    if (!window.confirm("Delete this timer?")) return;
+    if (!globalThis.confirm("Delete this timer?")) return;
     setBusy(true);
     try {
       await deleteTimer(timer.id);

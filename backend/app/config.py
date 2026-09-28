@@ -41,6 +41,9 @@ class Settings(BaseSettings):
     # Full-history backfill runs this many 200-post pages per channel per
     # cycle, so a large channel fills over several cycles.
     mattermost_backfill_pages_per_cycle: int = 10
+    # Upper bound on search or history pages one ask run may read. A run
+    # that hits it is marked "partial" and should be narrowed.
+    mattermost_ask_max_pages: int = 20
     # Comma-separated list of Mattermost channel IDs to poll. Channels
     # the bot account isn't a member of are silently skipped (Mattermost
     # rejects the GET with a 403).

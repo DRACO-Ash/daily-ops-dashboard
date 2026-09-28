@@ -18,8 +18,8 @@ function clearTokens(): void {
 
 function redirectToLogin(): void {
   clearTokens();
-  if (window.location.pathname !== "/login") {
-    window.location.assign("/login");
+  if (globalThis.location.pathname !== "/login") {
+    globalThis.location.assign("/login");
   }
 }
 
@@ -39,7 +39,7 @@ async function attemptRefresh(): Promise<string> {
   }
   const refreshToken = localStorage.getItem(REFRESH_TOKEN_KEY);
   if (!refreshToken) {
-    return Promise.reject(new Error("No refresh token available"));
+    throw new Error("No refresh token available");
   }
   refreshPromise = axios
     .post<{ access_token: string; refresh_token: string }>("/api/v1/auth/refresh", {
@@ -67,14 +67,14 @@ apiClient.interceptors.response.use(
     const config = error.config as (AxiosRequestConfig & { _retry?: boolean }) | undefined;
 
     if (!config || status !== 401) {
-      return Promise.reject(error);
+      throw error;
     }
 
     const isAuthEndpoint = config.url?.includes("/auth/") ?? false;
 
     if (config._retry || isAuthEndpoint) {
       redirectToLogin();
-      return Promise.reject(error);
+      throw error;
     }
 
     config._retry = true;
@@ -87,7 +87,7 @@ apiClient.interceptors.response.use(
       return apiClient.request(config);
     } catch {
       redirectToLogin();
-      return Promise.reject(error);
+      throw error;
     }
   },
 );

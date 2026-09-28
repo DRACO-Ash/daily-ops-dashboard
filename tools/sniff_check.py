@@ -38,7 +38,7 @@ from typing import Iterable, NamedTuple
 MAX_COGNITIVE = 15
 MAX_PARAMS = 13
 PY_EXT = (".py",)
-WEB_EXT = (".html", ".htm", ".js")
+WEB_EXT = (".html", ".htm", ".js", ".ts", ".tsx")
 
 
 class Finding(NamedTuple):

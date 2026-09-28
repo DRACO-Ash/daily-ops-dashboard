@@ -14,6 +14,7 @@ from app.api.v1.routes import (
     health,
     maneuvers,
     mattermost,
+    mattermost_asks,
     notifications,
     procedures,
     shift_log,
@@ -80,6 +81,7 @@ app.include_router(elsets.router, prefix="/api/v1")
 app.include_router(notifications.router, prefix="/api/v1")
 app.include_router(maneuvers.router, prefix="/api/v1")
 app.include_router(mattermost.router, prefix="/api/v1")
+app.include_router(mattermost_asks.router, prefix="/api/v1")
 app.include_router(procedures.router, prefix="/api/v1")
 app.include_router(shift_log.router, prefix="/api/v1")
 app.include_router(event_timers.router, prefix="/api/v1")
