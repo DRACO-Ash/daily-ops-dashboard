@@ -54,10 +54,9 @@ Mark every credential as secret.
 | `APP_ENV` | Yes | `production` (disables `/api/docs`) |
 | `ANTHROPIC_API_KEY` | For the assistant, secret | |
 | `UDL_USERNAME`, `UDL_PASSWORD` | For UDL ingest, secret | |
-| `MATTERMOST_URL` | For Mattermost ingest | `https://mattermost.dragonarmy.rocks` |
-| `MATTERMOST_BOT_TOKEN` | For Mattermost ingest, secret | dok.bot's personal access token |
-| `MATTERMOST_TEAM` | For Mattermost ingest | `jco`: ingests every channel dok.bot belongs to |
-| `MATTERMOST_CHANNEL_IDS` | No | Overrides discovery with specific channel ids |
+| `MATTERMOST_URL` | For Mattermost asks | `https://mattermost.dragonarmy.rocks` |
+| `MATTERMOST_BOT_TOKEN` | For Mattermost asks, secret | dok.bot's personal access token |
+| `MATTERMOST_TEAM` | For Mattermost asks | `jco` |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD` | First deploy only, secret | Remove after first sign-in |
 | `BACKGROUND_REFRESH_ENABLED` | No | Default `true` |
 
@@ -85,5 +84,5 @@ pytest --cov --cov-report=term --cov-report=xml         # writes coverage.xml, f
 ● **Frontend dependency.** `react-router-dom` 6 carries a moderate advisory (GHSA-2j2x-hqr9-3h42) that needs a v7 upgrade.
 ● **Procedure files uploaded before this fix** were stored as `None.<ext>` and overwrote one another. Only the last upload of each extension survives on disk; earlier rows point at the wrong file and should be re-uploaded.
 ● **Audit rows written before this fix** cannot be re-verified from the stored timestamp. The chain is verifiable from the first entry written after deployment.
-● **Mattermost scope.** Ingest covers every channel dok.bot is a member of, human chat included, and the assistant sends recent chat to the Anthropic API. Adding the bot to a channel brings that channel's full history in on the next cycle.
+● **Mattermost scope.** Nothing is pulled continuously. Posts arrive only through saved asks and full-history pulls that an operator schedules (see `docs/user-handbook/mattermost-asks.md`). Asks search the channels dok.bot is a member of; archived channels are searched only if the Mattermost server allows viewing archived channels. Pulled posts, human chat included, can reach the Anthropic API through the assistant, and the "Suggest" helper sends the analyst's question and channel names (no posts).
 ● **Open items, not fixed.** No role checks on procedure, shift log or timer routes (any analyst can delete). Monthly timers drift to the 28th after a short month. The audit chain orders by timestamp, which depends on a steady server clock; a sequence column would be more robust.

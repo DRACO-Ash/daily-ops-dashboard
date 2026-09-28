@@ -101,6 +101,7 @@ docs/                   Documentation (see Documentation section)
 ● [Bluestaq App Store deployment](deploy/APPSTORE.md)
 ● [Operator manual](docs/runbook/operator-manual.md)
 ● [Analyst training manual](docs/user-handbook/training-manual.md)
+● [Mattermost asks](docs/user-handbook/mattermost-asks.md)
 ● [Phase 1 roadmap](docs/roadmap/phase-1.md)
 ● [Changelog](CHANGELOG.md)
 

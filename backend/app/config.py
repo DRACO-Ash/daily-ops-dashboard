@@ -32,23 +32,19 @@ class Settings(BaseSettings):
 
     mattermost_url: str = ""
     mattermost_bot_token: str = ""
-    # Channel discovery: when MATTERMOST_CHANNEL_IDS is empty, every open
-    # or private channel the bot belongs to in this team is ingested. Give
-    # the team URL name (e.g. "jco"), or its id to skip the name lookup.
+    # Team that asks search and full-history pulls discover channels in:
+    # the URL name (e.g. "jco"), or its id to skip the name lookup.
     mattermost_team: str = ""
     mattermost_team_id: str = ""
-    mattermost_poll_interval: int = 60
-    # Full-history backfill runs this many 200-post pages per channel per
-    # cycle, so a large channel fills over several cycles.
+    # How often the background loop checks for due asks and history jobs.
+    # Nothing is pulled unless an operator asked for it.
+    mattermost_interval_seconds: int = 60
+    # Full-history pulls read this many 200-post pages per channel per
+    # cycle, so a large channel completes over several cycles.
     mattermost_backfill_pages_per_cycle: int = 10
     # Upper bound on search or history pages one ask run may read. A run
     # that hits it is marked "partial" and should be narrowed.
     mattermost_ask_max_pages: int = 20
-    # Comma-separated list of Mattermost channel IDs to poll. Channels
-    # the bot account isn't a member of are silently skipped (Mattermost
-    # rejects the GET with a 403).
-    mattermost_channel_ids: str = ""
-    mattermost_interval_seconds: int = 60
     mattermost_prompt_window_hours: int = 6
     mattermost_max_messages_in_prompt: int = 30
 
